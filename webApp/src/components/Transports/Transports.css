@@ -1,0 +1,340 @@
+.transports-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* BREADCRUMB & PAGE HEADER */
+.transports-breadcrumb {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transports-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.transports-title-text {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.02em;
+}
+
+.transports-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.transports-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* MAIN CARD BOX & TOOLBAR */
+.transports-card-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.transports-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-left-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.transports-search-box {
+  position: relative;
+  width: 280px;
+}
+
+.transports-search-box svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.transports-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  background-color: #ffffff;
+  box-sizing: border-box;
+}
+
+.transports-search-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.entries-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.entries-select-dropdown {
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  background-color: #ffffff;
+  cursor: pointer;
+}
+
+.toolbar-export-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+
+.export-text-btn {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.export-text-btn:hover {
+  background-color: #f1f5f9;
+  color: #0284c7;
+}
+
+/* DESKTOP TABLE (DESKTOP REF) */
+.transports-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transports-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+}
+
+.transports-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.transports-table tr:last-child td {
+  border-bottom: none;
+}
+
+.transport-id-td {
+  font-weight: 700;
+  color: #334155;
+}
+
+.transport-name-td {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.status-pill-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-pill-transport.active {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.status-pill-transport.active::before {
+  content: '•';
+  font-size: 14px;
+  color: #16a34a;
+}
+
+.status-pill-transport.inactive {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+.status-pill-transport.inactive::before {
+  content: '•';
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* PAGINATION FOOTER */
+.transports-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #64748b;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-btn-box {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.page-btn-box:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.page-btn-box.active {
+  background-color: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.page-btn-box:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* MOBILE TRANSPORT CARDS (MOBILE REF) */
+.mobile-transports-list {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-transport-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.mobile-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.mobile-truck-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background-color: #f1f5f9;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mobile-card-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mobile-card-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.mobile-card-info-row svg {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .transports-table,
+  .transports-toolbar {
+    display: none;
+  }
+  .mobile-transports-list {
+    display: flex;
+  }
+}

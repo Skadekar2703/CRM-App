@@ -1,0 +1,346 @@
+.items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* BREADCRUMB & PAGE HEADER */
+.items-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.items-title-text {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+/* MAIN CARD BOX & TOOLBAR (REF 2) */
+.items-card-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.items-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.items-search-box {
+  position: relative;
+  width: 320px;
+}
+
+.items-search-box svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.items-search-input {
+  width: 100%;
+  padding: 9px 12px 9px 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  background-color: #ffffff;
+  box-sizing: border-box;
+}
+
+.items-search-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.toolbar-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.btn-icon-text {
+  padding: 8px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-text:hover {
+  background-color: #f8fafc;
+  color: #0284c7;
+  border-color: #0284c7;
+}
+
+.btn-primary-item {
+  padding: 9px 18px;
+  background-color: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.15s ease;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary-item:hover {
+  background-color: #0369a1;
+}
+
+/* DESKTOP TABLE (REF 2) */
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.items-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+}
+
+.items-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.items-table tr:last-child td {
+  border-bottom: none;
+}
+
+.item-id-td {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.item-name-td {
+  font-weight: 700;
+  color: #0284c7;
+  cursor: pointer;
+}
+
+.item-name-td:hover {
+  text-decoration: underline;
+}
+
+.item-price-td {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* STATUS BADGES (REF 1 & 2) */
+.badge-item-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badge-item-status.active {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.badge-item-status.low-stock {
+  background-color: #ffedd5;
+  color: #c2410c;
+}
+
+.badge-item-status.draft,
+.badge-item-status.inactive {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+/* PAGINATION FOOTER */
+.items-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #64748b;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-group-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-btn-item {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.page-btn-item:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.page-btn-item.active {
+  background-color: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.page-btn-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* MOBILE CARDS (MATCHING REF 1 SCREENSHOT) */
+.mobile-items-list {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-item-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.mobile-item-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.mobile-item-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.mobile-item-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.mobile-item-card-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.mobile-item-price-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.mobile-item-price-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0284c7;
+  margin-top: 2px;
+}
+
+.mobile-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-action-btn-gray {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #f1f5f9;
+  border: none;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.mobile-action-btn-red {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #fef2f2;
+  border: none;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .items-table,
+  .items-toolbar {
+    display: none;
+  }
+  .mobile-items-list {
+    display: flex;
+  }
+}

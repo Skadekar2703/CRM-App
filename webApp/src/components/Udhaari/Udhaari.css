@@ -1,0 +1,474 @@
+.udhaari-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* PAGE HEADER (REF 2) */
+.udhaari-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.udhaari-title-text {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.udhaari-subtitle-text {
+  font-size: 14px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.udhaari-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-secondary-udhaari {
+  padding: 9px 18px;
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary-udhaari:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-primary-udhaari {
+  padding: 9px 18px;
+  background-color: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.15s ease;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary-udhaari:hover {
+  background-color: #0369a1;
+}
+
+/* SUMMARY CARDS (REF 2) */
+.udhaari-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.summary-card-udhaari {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.summary-card-udhaari.red-accent::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #dc2626;
+}
+
+.summary-card-udhaari.blue-accent::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #0284c7;
+}
+
+.summary-card-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.summary-card-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 6px;
+}
+
+.summary-card-value.red-text {
+  color: #dc2626;
+}
+
+.summary-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-icon-box.red-bg {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.summary-icon-box.green-bg {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.summary-icon-box.blue-bg {
+  background-color: #eff6ff;
+  color: #0284c7;
+}
+
+/* MAIN CARD BOX & TOOLBAR (REF 2) */
+.udhaari-card-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.udhaari-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.udhaari-filter-dropdowns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.udhaari-select {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334155;
+  background-color: #ffffff;
+  outline: none;
+  font-weight: 500;
+}
+
+.udhaari-select:focus {
+  border-color: #0284c7;
+}
+
+/* DESKTOP TABLE (REF 2) */
+.udhaari-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.udhaari-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  background-color: #0f172a;
+  padding: 14px 16px;
+  text-transform: uppercase;
+}
+
+.udhaari-table th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.udhaari-table th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.udhaari-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.udhaari-customer-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.customer-initial-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #0284c7;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.customer-initial-avatar.green {
+  background-color: #16a34a;
+}
+
+.customer-initial-avatar.blue-light {
+  background-color: #bae6fd;
+  color: #0369a1;
+}
+
+.customer-initial-avatar.green-light {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+/* CIBIL PILL BADGES */
+.cibil-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cibil-pill.bad {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.cibil-pill.good {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.cibil-pill.average {
+  background-color: #ffedd5;
+  color: #c2410c;
+}
+
+.balance-red-text {
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.balance-green-text {
+  font-weight: 700;
+  color: #16a34a;
+}
+
+/* MOBILE CARDS (MATCHING REF 1 SCREENSHOT) */
+.mobile-udhaari-list {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-summary-cards {
+  display: flex;
+  gap: 12px;
+}
+
+.mobile-summary-card {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.mobile-summary-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-summary-amount {
+  font-size: 20px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.mobile-customer-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.mobile-card-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.mobile-card-customer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-avatar-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.mobile-avatar-circle.blue-bg {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.mobile-avatar-circle.green-bg {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.mobile-customer-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mobile-customer-area {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.mobile-card-balance-box {
+  text-align: right;
+}
+
+.mobile-card-balance-text {
+  font-size: 16px;
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.mobile-card-date-text {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.mobile-card-divider {
+  height: 1px;
+  background-color: #f1f5f9;
+  margin: 2px 0;
+}
+
+.mobile-card-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-cibil-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.mobile-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.circle-action-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background-color: #f1f5f9;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.circle-action-btn.red-bg {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.circle-action-btn.blue-bg {
+  background-color: #eff6ff;
+  color: #0284c7;
+}
+
+@media (max-width: 768px) {
+  .udhaari-table,
+  .udhaari-filter-toolbar,
+  .udhaari-summary-cards {
+    display: none;
+  }
+  .mobile-udhaari-list {
+    display: flex;
+  }
+}

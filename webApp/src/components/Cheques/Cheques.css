@@ -1,0 +1,255 @@
+.cheques-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* PAGE HEADER (WEB REF) */
+.cheques-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.cheques-title-text {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.cheques-subtitle-text {
+  font-size: 14px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* 4 SUMMARY CARDS (WEB REF) */
+.cheques-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.summary-card-cheque {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.cheque-card-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.cheque-card-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 4px;
+}
+
+.cheque-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cheque-icon-box.blue {
+  background-color: #eff6ff;
+  color: #0284c7;
+}
+
+.cheque-icon-box.orange {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
+.cheque-icon-box.green {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.cheque-icon-box.red {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+/* MAIN CARD BOX & TOOLBAR (WEB REF) */
+.cheques-card-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.cheques-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cheques-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* DESKTOP DATA TABLE (WEB REF) */
+.cheques-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cheques-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+}
+
+.cheques-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+/* STATUS BADGES */
+.badge-cheque-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badge-cheque-status.pending {
+  background-color: #ffedd5;
+  color: #c2410c;
+}
+
+.badge-cheque-status.cleared {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.badge-cheque-status.bounced {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.badge-direction {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badge-direction.inward {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.badge-direction.outward {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+}
+
+/* MOBILE CHEQUE CARDS (MATCHING MOBILE REF) */
+.mobile-cheques-list {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-cheque-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.mobile-cheque-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.mobile-party-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mobile-cheque-ref {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.mobile-cheque-divider {
+  height: 1px;
+  background-color: #f1f5f9;
+  margin: 2px 0;
+}
+
+.mobile-cheque-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-cheque-date {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.mobile-cheque-amount {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+@media (max-width: 768px) {
+  .cheques-table,
+  .cheques-toolbar,
+  .cheques-summary-cards {
+    display: none;
+  }
+  .mobile-cheques-list {
+    display: flex;
+  }
+}
