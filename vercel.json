@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build --prefix webApp",
   "outputDirectory": "webApp/dist",
   "framework": "vite",
   "rewrites": [

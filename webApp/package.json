@@ -1,17 +1,17 @@
 {
   "name": "webApp",
   "version": "1.0.0",
-  "description": "Web application that uses Kotlin Multiplatform Library",
+  "description": "Web application for CRM platform",
   "type": "module",
   "scripts": {
     "build": "tsc && vite build",
-    "start": "vite"
+    "start": "vite",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "sharedLogic": "file:../sharedLogic/build/dist/js/productionLibrary"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

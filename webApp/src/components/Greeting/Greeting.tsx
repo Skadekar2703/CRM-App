@@ -1,9 +1,13 @@
 import './Greeting.css';
-
 import { useState } from 'react';
 import { JSLogo } from '../JSLogo/JSLogo.tsx';
-import { Greeting as KotlinGreeting } from 'sharedLogic';
 import type { AnimationEvent } from 'react';
+
+class KotlinGreeting {
+  greet(): string {
+    return 'Hello from CRM App!';
+  }
+}
 
 export function Greeting() {
   const greeting = new KotlinGreeting();
