@@ -338,3 +338,35 @@
     display: flex;
   }
 }
+
+/* DARK THEME OVERRIDES */
+body.dark-theme .transports-title-text,
+body.dark-theme .transports-subtitle,
+body.dark-theme .transports-table td,
+body.dark-theme .transport-name-td,
+body.dark-theme .mobile-card-title,
+body.dark-theme .entries-group {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .transports-table th {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+  border-bottom-color: #334155 !important;
+}
+
+body.dark-theme .transports-card-box,
+body.dark-theme .mobile-transport-card,
+body.dark-theme .page-btn-box {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+body.dark-theme .transports-search-input,
+body.dark-theme .entries-select-dropdown {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+

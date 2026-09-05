@@ -20,7 +20,8 @@ data class UdhaariCustomerModel(
     val balanceType: String = if (outstanding < 0) "Jama" else "Baki",
     val creditLimit: Double = 100000.0,
     val lastTxnDate: String = "Recent",
-    val status: String = "Active" // "Active" or "Inactive"
+    val status: String = "Active", // "Active" or "Inactive"
+    val photoUrl: String? = null
 )
 
 @JsExport
@@ -195,7 +196,7 @@ object UdhaariRepository {
             if (type.equals("Baki", ignoreCase = true)) {
                 newBaki += amount
             } else {
-                newBaki = max(0.0, newBaki - amount)
+                newBaki -= amount
                 newJama += amount
             }
 

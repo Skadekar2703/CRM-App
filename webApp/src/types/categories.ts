@@ -1,7 +1,7 @@
 export interface Category {
   id: string;
   name: string;
-  type: 'Item Category' | 'Customer Category';
+  type?: string;
   status: 'Active' | 'Inactive' | 'Archived';
   createdDate: string;
   usageCount: number;

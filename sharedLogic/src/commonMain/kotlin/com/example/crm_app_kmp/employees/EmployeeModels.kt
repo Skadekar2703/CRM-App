@@ -4,84 +4,69 @@ import kotlin.js.JsExport
 
 @JsExport
 data class EmployeeModel(
-    val id: String,              // e.g. "EMP-001"
-    val name: String,            // e.g. "Ramesh Kumar"
-    val role: String,            // e.g. "Senior Sales Exec"
-    val mobile: String,          // e.g. "+91 98765 43210"
-    val email: String = "",      // e.g. "ramesh@crm.com"
-    val udhaarBalance: Double = 0.0, // e.g. 12500.0
-    val status: String = "Active"// "Active" or "Inactive"
+    val id: String,
+    val uid: String = "EMP-001",
+    val name: String,
+    val role: String = "Staff",
+    val mobile: String = "",
+    val email: String = "",
+    val address: String = "",
+    val bankName: String = "",
+    val bankAccount: String = "",
+    val idNumber: String = "",
+    val emergencyContact: String = "",
+    val joinedOn: String = "05 Sep 2026",
+    val leftOn: String = "",
+    val photoUrl: String = "",
+    val remark: String = "",
+    val activeDays: Int = 0,
+    val salary: Double = 0.0,
+    val salaryType: String = "Monthly", // "Monthly" or "Per Day"
+    val udhaarBalance: Double = 0.0,
+    val ctcYtd: Double = 0.0,
+    val status: String = "Active"
 ) {
     val udhaarBalanceFormatted: String get() = "₹${udhaarBalance.toInt()}"
 }
 
 @JsExport
+data class EmployeeTransactionModel(
+    val id: String,
+    val employeeId: String,
+    val employeeUid: String = "",
+    val type: String, // 'Gift', 'Bonus', 'Extra Payment', 'Employee Udhaar', 'Labour Expense', 'Udhaar Repayment'
+    val amount: Double,
+    val date: String,
+    val note: String = ""
+)
+
+@JsExport
 object EmployeeRepository {
     private val initialEmployees = mutableListOf<EmployeeModel>()
+    private val initialTransactions = mutableListOf<EmployeeTransactionModel>()
 
     fun getEmployees(): List<EmployeeModel> = initialEmployees.toList()
+    fun getTransactions(): List<EmployeeTransactionModel> = initialTransactions.toList()
 
     fun getTotalStaffCount(): Int = initialEmployees.size
+    fun getActiveStaffCount(): Int = initialEmployees.count { it.status.equals("Active", ignoreCase = true) }
+    fun getTotalOutstandingUdhaar(): Double = initialEmployees.sumOf { it.udhaarBalance }
+    fun getTotalUdhaar(): Double = initialEmployees.sumOf { it.udhaarBalance }
+    fun getTotalLabourExpense(): Double = initialTransactions.filter { 
+        it.type.equals("Labour Expense", ignoreCase = true) || it.type.equals("Bonus", ignoreCase = true) || it.type.equals("Extra Payment", ignoreCase = true) || it.type.equals("Gift", ignoreCase = true)
+    }.sumOf { it.amount }
 
-    fun getTotalOutstanding(): Double = initialEmployees.sumOf { it.udhaarBalance }
-
-    fun filterEmployees(query: String = ""): List<EmployeeModel> {
+    fun filterEmployees(query: String = "", statusFilter: String = "All"): List<EmployeeModel> {
         val q = query.lowercase().trim()
-        if (q.isEmpty()) return initialEmployees.toList()
         return initialEmployees.filter { e ->
-            e.id.lowercase().contains(q) ||
+            val matchesQ = q.isEmpty() ||
+                    e.id.lowercase().contains(q) ||
+                    e.uid.lowercase().contains(q) ||
                     e.name.lowercase().contains(q) ||
                     e.role.lowercase().contains(q) ||
                     e.mobile.lowercase().contains(q)
+            val matchesStatus = statusFilter.equals("All", ignoreCase = true) || e.status.equals(statusFilter, ignoreCase = true)
+            matchesQ && matchesStatus
         }
-    }
-
-    fun addEmployee(
-        name: String,
-        role: String,
-        mobile: String,
-        email: String,
-        udhaarBalance: Double
-    ): EmployeeModel {
-        val nextId = "EMP-00${initialEmployees.size + 1}"
-        val newE = EmployeeModel(
-            id = nextId,
-            name = name,
-            role = role.ifBlank { "Staff" },
-            mobile = mobile,
-            email = email,
-            udhaarBalance = if (udhaarBalance < 0) 0.0 else udhaarBalance,
-            status = "Active"
-        )
-        initialEmployees.add(0, newE)
-        return newE
-    }
-
-    fun updateEmployee(
-        id: String,
-        name: String,
-        role: String,
-        mobile: String,
-        email: String,
-        udhaarBalance: Double
-    ): EmployeeModel? {
-        val idx = initialEmployees.indexOfFirst { it.id == id }
-        if (idx >= 0) {
-            val existing = initialEmployees[idx]
-            val updated = existing.copy(
-                name = name,
-                role = role,
-                mobile = mobile,
-                email = email,
-                udhaarBalance = udhaarBalance
-            )
-            initialEmployees[idx] = updated
-            return updated
-        }
-        return null
-    }
-
-    fun deleteEmployee(id: String): Boolean {
-        return initialEmployees.removeAll { it.id == id }
     }
 }

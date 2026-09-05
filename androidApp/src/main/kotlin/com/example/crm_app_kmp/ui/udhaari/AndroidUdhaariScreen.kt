@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -73,6 +75,9 @@ import com.example.crm_app_kmp.ui.theme.TextMuted
 import com.example.crm_app_kmp.ui.theme.TextPrimary
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun AndroidUdhaariScreen(
@@ -116,8 +121,14 @@ fun AndroidUdhaariContent() {
                     val obj = array.getJSONObject(i)
                     val rawBaki = obj.optDouble("baki", 0.0)
                     val rawJama = obj.optDouble("jama", 0.0)
-                    val bakiVal = if (rawBaki >= 0) rawBaki else 0.0
-                    val jamaVal = if (rawBaki < 0) kotlin.math.abs(rawBaki) else rawJama
+                    val currentBaki = rawBaki - rawJama
+                    val rawPhoto = obj.optString("photo_url", "").trim()
+                    val photoUrl: String? = when {
+                        rawPhoto.isBlank() || rawPhoto.equals("null", ignoreCase = true) -> null
+                        rawPhoto.startsWith("http://") || rawPhoto.startsWith("https://") -> rawPhoto
+                        rawPhoto.startsWith("data:image") -> rawPhoto
+                        else -> supabaseClient.fetchSignedStorageUrl(rawPhoto)
+                    }
 
                     customersList.add(
                         UdhaariCustomerModel(
@@ -127,11 +138,12 @@ fun AndroidUdhaariContent() {
                             area = obj.optString("area", "General Area"),
                             category = obj.optString("category", "Regular"),
                             cibilStatus = obj.optString("cibil_status", "Good"),
-                            baki = bakiVal,
-                            jama = jamaVal,
+                            baki = currentBaki,
+                            jama = rawJama,
                             creditLimit = obj.optDouble("credit_limit", 100000.0),
                             lastTxnDate = "Recent",
-                            status = obj.optString("status", "Active")
+                            status = obj.optString("status", "Active"),
+                            photoUrl = photoUrl
                         )
                     )
                 }
@@ -153,9 +165,9 @@ fun AndroidUdhaariContent() {
             UdhaariRepository.calculateTotalJama(customersList)
         }
     }
-    val totalOutstanding by remember {
+    val activeCustomerCount by remember {
         androidx.compose.runtime.derivedStateOf {
-            UdhaariRepository.calculateTotalOutstanding(totalBaki, totalJama)
+            customersList.count { it.status.equals("Active", ignoreCase = true) }
         }
     }
 
@@ -171,10 +183,15 @@ fun AndroidUdhaariContent() {
         matchesQuery && matchesArea
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -187,7 +204,7 @@ fun AndroidUdhaariContent() {
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(
@@ -198,7 +215,7 @@ fun AndroidUdhaariContent() {
                         Text(
                             text = "Total Baki",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = ErrorRed
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -215,7 +232,7 @@ fun AndroidUdhaariContent() {
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(
@@ -226,24 +243,24 @@ fun AndroidUdhaariContent() {
                         Text(
                             text = "Total Jama",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF16A34A)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = UdhaariCurrencyFormatter.formatIndianCurrency(totalJama),
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF16A34A)
                         )
                     }
                 }
 
-                // CARD 3: OUTSTANDING
+                // CARD 3: CUSTOMERS
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(
@@ -252,17 +269,17 @@ fun AndroidUdhaariContent() {
                             .padding(12.dp)
                     ) {
                         Text(
-                            text = "Outstanding",
+                            text = "CUSTOMERS",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            fontWeight = FontWeight.ExtraBold,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = UdhaariCurrencyFormatter.formatIndianCurrency(totalOutstanding),
+                            text = "$activeCustomerCount",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = if (totalOutstanding >= 0) ErrorRed else Color(0xFF16A34A)
+                            color = PrimaryBlue
                         )
                     }
                 }
@@ -307,11 +324,11 @@ fun AndroidUdhaariContent() {
                     Text("No customer credit records found.", color = TextMuted, fontSize = 14.sp)
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(bottom = 80.dp)
                 ) {
-                    items(filteredCustomers) { customer ->
+                    filteredCustomers.forEach { customer ->
                         MobileUdhaariCustomerCard(
                             customer = customer,
                             onAddBaki = {
@@ -445,7 +462,7 @@ fun AndroidUdhaariContent() {
         Dialog(onDismissRequest = { deletingCustomer = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -463,7 +480,7 @@ fun AndroidUdhaariContent() {
                     ) {
                         Button(
                             onClick = { deletingCustomer = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Cancel", fontSize = 13.sp)
@@ -502,7 +519,7 @@ private fun MobileUdhaariCustomerCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -529,14 +546,49 @@ private fun MobileUdhaariCustomerCard(
                         else -> Color(0xFF0369A1)
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(avatarBg),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(initials, color = avatarText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    if (!customer.photoUrl.isNullOrBlank()) {
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(customer.photoUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = customer.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(avatarBg),
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(avatarBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(initials, color = avatarText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(avatarBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(initials, color = avatarText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
+                            }
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(avatarBg),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(initials, color = avatarText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -556,17 +608,6 @@ private fun MobileUdhaariCustomerCard(
                         }
                     }
                 }
-
-                // Outstanding amount
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Outstanding", fontSize = 11.sp, color = TextMuted, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = UdhaariCurrencyFormatter.formatIndianCurrency(customer.outstanding),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (customer.outstanding >= 0) ErrorRed else Color(0xFF16A34A)
-                    )
-                }
             }
 
             // Baki & Jama metrics box
@@ -574,7 +615,7 @@ private fun MobileUdhaariCustomerCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFF8FAFC))
+                    .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant)
                     .padding(8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -588,7 +629,7 @@ private fun MobileUdhaariCustomerCard(
                 }
             }
 
-            HorizontalDivider(color = Color(0xFFF1F5F9))
+            HorizontalDivider(color = androidx.compose.material3.MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -619,22 +660,22 @@ private fun MobileUdhaariCustomerCard(
                         modifier = Modifier
                             .size(30.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF1F5F9))
+                            .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant)
                             .clickable { onViewHistory() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.History, contentDescription = "History", tint = TextPrimary, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Default.History, contentDescription = "History", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp))
                     }
 
                     Box(
                         modifier = Modifier
                             .size(30.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF1F5F9))
+                            .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant)
                             .clickable { onEdit() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Profile", tint = TextPrimary, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Profile", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp))
                     }
                 }
             }
@@ -688,7 +729,7 @@ private fun UdhaariHistoryDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -722,7 +763,7 @@ private fun UdhaariHistoryDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFF8FAFC))
+                                    .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant)
                                     .padding(10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -754,7 +795,7 @@ private fun UdhaariHistoryDialog(
 
                 Button(
                     onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.align(Alignment.End)
                 ) {
@@ -782,7 +823,7 @@ private fun UdhaariCustomerFormDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -867,7 +908,7 @@ private fun UdhaariCustomerFormDialog(
                 ) {
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Cancel", fontSize = 13.sp)
@@ -916,7 +957,7 @@ private fun UdhaariTxnDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -1010,7 +1051,7 @@ private fun UdhaariTxnDialog(
                 ) {
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Cancel", fontSize = 13.sp)

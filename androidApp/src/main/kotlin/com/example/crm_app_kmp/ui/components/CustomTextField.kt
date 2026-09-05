@@ -44,7 +44,7 @@ fun CustomTextField(
             text = label,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
+            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(6.dp))
         OutlinedTextField(
@@ -70,14 +70,14 @@ fun CustomTextField(
             isError = errorMessage != null,
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = InputBackground,
-                errorContainerColor = Color.White,
+                focusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+                errorContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 focusedBorderColor = PrimaryBlue,
-                unfocusedBorderColor = BorderLight,
+                unfocusedBorderColor = androidx.compose.material3.MaterialTheme.colorScheme.outline,
                 errorBorderColor = ErrorRed,
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary
+                focusedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
             )
         )
         if (errorMessage != null) {

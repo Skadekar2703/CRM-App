@@ -116,7 +116,7 @@ fun AndroidAreasScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -147,8 +147,8 @@ fun AndroidAreasScreen() {
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(if (isSelected) Color(0xFF0F172A) else Color.White)
-                            .border(1.dp, if (isSelected) Color(0xFF0F172A) else Color(0xFFCBD5E1), CircleShape)
+                            .background(if (isSelected) androidx.compose.material3.MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                            .border(1.dp, if (isSelected) androidx.compose.material3.MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.outline, CircleShape)
                             .clickable { selectedStatusFilter = filter }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
@@ -156,7 +156,7 @@ fun AndroidAreasScreen() {
                             text = filter,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isSelected) Color.White else TextPrimary
+                            color = if (isSelected) androidx.compose.material3.MaterialTheme.colorScheme.onPrimary else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -245,7 +245,7 @@ fun AndroidAreasScreen() {
         Dialog(onDismissRequest = { deletingArea = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -254,8 +254,8 @@ fun AndroidAreasScreen() {
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("Delete Area?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete '${target.name}'?", fontSize = 14.sp, color = TextMuted)
+                    Text("Delete Area?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                    Text("Are you sure you want to delete '${target.name}'?", fontSize = 14.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -264,7 +264,7 @@ fun AndroidAreasScreen() {
                     ) {
                         Button(
                             onClick = { deletingArea = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Cancel", fontSize = 13.sp)
@@ -299,10 +299,12 @@ private fun ColumnScope.LazyLazyColumnList(
 ) {
     if (areas.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Text("No areas found.", color = TextMuted, fontSize = 14.sp)
+            Text("No areas found.", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
         }
     } else {
         LazyColumn(
@@ -313,7 +315,7 @@ private fun ColumnScope.LazyLazyColumnList(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
@@ -328,35 +330,35 @@ private fun ColumnScope.LazyLazyColumnList(
                                 text = area.name,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(if (area.status == "Active") Color(0xFFF0FDF4) else Color(0xFFF1F5F9))
+                                        .background(if (area.status == "Active") Color(0xFFF0FDF4) else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant)
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = area.status,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (area.status == "Active") Color(0xFF16A34A) else TextMuted
+                                        color = if (area.status == "Active") Color(0xFF16A34A) else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = "${area.locationCount} Locations",
                                     fontSize = 13.sp,
-                                    color = TextMuted
+                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { onEdit(area) }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextMuted)
+                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { onDelete(area) }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
@@ -382,7 +384,7 @@ private fun AreaFormDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -400,10 +402,10 @@ private fun AreaFormDialog(
                         text = if (editingArea != null) "Edit Area" else "Add New Area",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -417,7 +419,7 @@ private fun AreaFormDialog(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Area Name *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Area Name *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
                     OutlinedTextField(
                         value = name,
                         onValueChange = {
@@ -432,14 +434,14 @@ private fun AreaFormDialog(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(
                             selected = status == "Active",
                             onClick = { status = "Active" },
                             colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
                         )
-                        Text("Active", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Active", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
 
                         Spacer(modifier = Modifier.width(16.dp))
 
@@ -448,7 +450,7 @@ private fun AreaFormDialog(
                             onClick = { status = "Inactive" },
                             colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
                         )
-                        Text("Inactive", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Inactive", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
@@ -458,7 +460,7 @@ private fun AreaFormDialog(
                 ) {
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Cancel", fontSize = 13.sp)

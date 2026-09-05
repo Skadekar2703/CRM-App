@@ -4,6 +4,7 @@ struct SignUpView: View {
     var onNavigateToLogin: () -> Void
 
     @StateObject private var client = SupabaseIOSClient.shared
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = true
 
     @State private var username = ""
     @State private var email = ""
@@ -20,9 +21,11 @@ struct SignUpView: View {
 
     private let deepNavy = Color(red: 15/255, green: 23/255, blue: 42/255)
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
-    private let borderLight = Color(red: 226/255, green: 232/255, blue: 240/255)
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
+    private let borderLight = Color(red: 51/255, green: 65/255, blue: 85/255)
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var inputBg: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 30/255, green: 41/255, blue: 59/255) : Color.white }
     private let inputBg = Color(red: 248/255, green: 250/255, blue: 252/255)
     private let errorRed = Color(red: 220/255, green: 38/255, blue: 38/255)
 
@@ -291,7 +294,7 @@ struct SignUpView: View {
                         .padding(.bottom, 8)
                     }
                     .padding(28)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(16)
                     .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 4)
                     .frame(maxWidth: 440)

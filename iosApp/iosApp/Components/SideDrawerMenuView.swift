@@ -2,32 +2,35 @@ import SwiftUI
 
 struct SideDrawerMenuView: View {
     let activeSection: String
+    var userRole: String = "STAFF"
+    @AppStorage("crm_is_dark_mode") private var isDarkMode = false
+    var onToggleTheme: () -> Void = {}
+    var onLogout: () -> Void = {}
     var onSelectSection: (String) -> Void
 
-    let menuItems: [(id: String, label: String)] = [
-        ("Dashboard", "Dashboard"),
-        ("Sales", "Sales"),
-        ("Areas", "Areas"),
-        ("Categories", "Categories"),
-        ("Items", "Items"),
-        ("Transports", "Transports"),
-        ("Udhaari", "Udhaari"),
-        ("Cheques", "Cheques"),
-        ("Customers", "Customers"),
-        ("Suppliers", "Suppliers"),
-        ("Employees", "Employees"),
-        ("Daag", "Daag"),
-        ("Notepad", "Notepad"),
-        ("Reminders", "Reminders"),
-        ("Expenses", "Expenses"),
-        ("Supplier Ledger", "Supplier Ledger"),
-        ("Cash Book", "Cash Book"),
-        ("Profit & Loss", "Profit & Loss"),
-        ("Aging Report", "Aging Report"),
-        ("Users", "Users"),
-        ("Settings", "Settings"),
-        ("Sign Out", "Logout")
+    let allMenuItems: [(id: String, label: String, adminOnly: Bool)] = [
+        ("Dashboard", "Dashboard", false),
+        ("Customers", "Customers", false),
+        ("Employees", "Employees", false),
+        ("Categories", "Categories", false),
+        ("Udhaari", "Udhaari", false),
+        ("Profit & Loss", "Profit & Loss", false),
+        ("Cheques", "Cheques", false),
+        ("Cash Book", "Cash Book", false),
+        ("Expenses", "Expenses", false),
+        ("Areas", "Areas", false),
+        ("Notepad", "Notepad", false),
+        ("Reminders", "Reminders", false),
+        ("Daag", "Daag", false),
+        ("Users", "Users", true),
+        ("Settings", "Settings", false),
+        ("Dark Theme", "Dark Theme", false),
+        ("Logout", "Logout", false)
     ]
+
+    var visibleMenuItems: [(id: String, label: String, adminOnly: Bool)] {
+        allMenuItems.filter { !$0.adminOnly || userRole.caseInsensitiveCompare("ADMIN") == .orderedSame }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -39,7 +42,7 @@ struct SideDrawerMenuView: View {
                     .foregroundColor(.blue)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("CRM Admin")
+                    Text(userRole.caseInsensitiveCompare("ADMIN") == .orderedSame ? "CRM Admin" : "CRM Staff")
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -56,14 +59,26 @@ struct SideDrawerMenuView: View {
             // VERTICALLY SCROLLABLE MENU LIST
             ScrollView(showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(menuItems, id: \.id) { item in
+                    ForEach(visibleMenuItems, id: \.id) { item in
                         let isSelected = item.id.caseInsensitiveCompare(activeSection) == .orderedSame
-                        Button(action: { onSelectSection(item.id) }) {
+                        let itemLabel = item.id == "Dark Theme" ? (isDarkMode ? "☀️ Light Mode" : "🌙 Dark Mode") : item.label
+                        let isLogout = item.id == "Logout"
+
+                        Button(action: {
+                            if item.id == "Logout" {
+                                onLogout()
+                            } else if item.id == "Dark Theme" {
+                                isDarkMode.toggle()
+                                onToggleTheme()
+                            } else {
+                                onSelectSection(item.id)
+                            }
+                        }) {
                             HStack {
-                                Text(item.label)
+                                Text(itemLabel)
                                     .font(.subheadline)
-                                    .fontWeight(isSelected ? .bold : .medium)
-                                    .foregroundColor(isSelected ? .white : Color(red: 148/255, green: 163/255, blue: 184/255))
+                                    .fontWeight(isSelected || isLogout ? .bold : .medium)
+                                    .foregroundColor(isLogout ? Color.red : (isSelected ? .white : Color(red: 148/255, green: 163/255, blue: 184/255)))
                                 Spacer()
                             }
                             .padding(.horizontal, 14)

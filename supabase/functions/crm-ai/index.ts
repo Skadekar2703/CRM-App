@@ -166,11 +166,8 @@ serve(async (req) => {
     let totalJama = 0;
 
     const processedCustomers = custsList.map((c: any) => {
-      const rawBaki = Number(c.baki || 0);
-      const rawJama = Number(c.jama || 0);
-      const bakiVal = rawBaki >= 0 ? rawBaki : 0;
-      const jamaVal = rawBaki < 0 ? Math.abs(rawBaki) : rawJama;
-      const outstandingVal = bakiVal - jamaVal;
+      const bakiVal = Number(c.baki || 0);
+      const jamaVal = Number(c.jama || 0);
 
       totalBaki += bakiVal;
       totalJama += jamaVal;
@@ -182,15 +179,11 @@ serve(async (req) => {
         area: c.area || "General",
         baki: formatIndianCurrency(bakiVal),
         jama: formatIndianCurrency(jamaVal),
-        outstanding: formatIndianCurrency(outstandingVal),
         rawBaki: bakiVal,
         rawJama: jamaVal,
-        rawOutstanding: outstandingVal,
         status: c.status || "Active"
       };
     });
-
-    const totalOutstanding = totalBaki - totalJama;
 
     const crmContext = {
       accountUserId: userId || "All-Accessible",
@@ -198,7 +191,6 @@ serve(async (req) => {
         totalCustomers: custsList.length,
         totalBaki: formatIndianCurrency(totalBaki),
         totalJama: formatIndianCurrency(totalJama),
-        totalOutstanding: formatIndianCurrency(totalOutstanding),
         totalItemsCount: rawItems?.length || 0,
         totalDaagEntries: rawDaag?.length || 0,
         totalSalesCount: rawSales?.length || 0,
@@ -262,12 +254,12 @@ serve(async (req) => {
       "CRITICAL RULES:\n" +
       "1. NEVER output Markdown bold asterisks (**) or bullet asterisks (*) anywhere in your response. Clean plain text only.\n" +
       "2. INTENT ROUTING:\n" +
-      "   - If the user asks about a SPECIFIC CUSTOMER (e.g., 'whats the baaki amount of rohan?', 'Rohan ka kitna baki hai?'), search the customers array in the context for a customer matching that name. Return Rohan's exact Baki, Jama, and Outstanding. DO NOT return the full business summary!\n" +
+      "   - If the user asks about a SPECIFIC CUSTOMER (e.g., 'whats the baaki amount of rohan?', 'Rohan ka kitna baki hai?'), search the customers array in the context for a customer matching that name. Return Rohan's exact Baki and Jama. DO NOT return the full business summary!\n" +
       "   - If the customer does NOT exist in the context, explicitly reply: 'I couldn't find a customer named [Name] in your CRM database.'\n" +
       "   - If the user asks about DAAG items (e.g., 'Daag mein kitne items hain?', 'How many items are in Daag?', 'Daag ke items dikhao'), answer using the daag array and totalDaagEntries summary. DO NOT treat 'Daag mein kitne items hain' as an item name search!\n" +
       "   - If the user asks about PRODUCT PRICE/STOCK (e.g., 'price of rice'), search the items array for rice and state its price and stock_quantity.\n" +
       "   - If the user asks for a GENERAL CRM/BUSINESS SUMMARY, output the dashboard summary statistics.\n" +
-      "3. Financial Math: Outstanding = Total Baki - Total Jama. Baki is debt owed by customer, Jama is payment received from customer.\n" +
+      "3. Financial Math: Total Baki is debt owed by customer, Total Jama is payment received from customer.\n" +
       "4. Support English, Hindi, and Hinglish queries seamlessly.";
 
     // BUILD GEMINI REST CONTEXT WITH CONVERSATION HISTORY

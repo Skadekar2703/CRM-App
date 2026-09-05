@@ -24,6 +24,12 @@ struct IOSExpenseItem: Identifiable {
 }
 
 struct IOSExpensesContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
+
     @State private var expenses: [IOSExpenseItem] = [
         IOSExpenseItem(
             id: "EXP-101",
@@ -70,6 +76,9 @@ struct IOSExpensesContentView: View {
     @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
 
+    var totalExpenses: Double { expenses.reduce(0) { $0 + $1.amount } }
+    var monthTotal: Double { expenses.filter { $0.date.contains("Aug") || $0.date.contains("Jun") }.reduce(0) { $0 + $1.amount } }
+
     var filteredExpenses: [IOSExpenseItem] {
         let q = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if q.isEmpty { return expenses }
@@ -108,7 +117,7 @@ struct IOSExpensesContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
@@ -124,7 +133,7 @@ struct IOSExpensesContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
@@ -140,7 +149,7 @@ struct IOSExpensesContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 }
@@ -160,7 +169,7 @@ struct IOSExpensesContentView: View {
                     }
                 }
                 .padding(10)
-                .background(Color.white)
+                .background(cardBg)
                 .cornerRadius(12)
                 .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 .padding(.horizontal, 16)
@@ -265,48 +274,39 @@ struct IOSExpenseCard: View {
     var onEdit: () -> Void
     var onDelete: () -> Void
 
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(expense.category)
                     .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                    .foregroundColor(textPrimary)
                 Spacer()
                 Text("₹\(Int(expense.amount))")
-                    .font(.title3)
+                    .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(.red)
             }
 
             HStack {
-                Text(expense.date)
+                Text("Paid to: \(expense.paidTo.isEmpty ? "—" : expense.paidTo) • \(expense.paymentMode)")
                     .font(.caption)
                     .foregroundColor(.gray)
                 Spacer()
-                Text(expense.paymentMode)
+                Text(expense.date)
                     .font(.caption2)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.blue.opacity(0.12))
-                    .foregroundColor(.blue)
-                    .cornerRadius(6)
+                    .foregroundColor(.gray)
             }
 
-            if !expense.paidTo.isEmpty || !expense.description.isEmpty {
-                Divider()
-                if !expense.paidTo.isEmpty {
-                    Text("Paid To: \(expense.paidTo)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                }
-                if !expense.description.isEmpty {
-                    Text(expense.description)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
+            if !expense.description.isEmpty && expense.description != "—" {
+                Text(expense.description)
+                    .font(.caption)
+                    .foregroundColor(.gray)
             }
 
             Divider()
@@ -315,37 +315,27 @@ struct IOSExpenseCard: View {
                 Spacer()
                 HStack(spacing: 8) {
                     Button(action: onEdit) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pencil")
-                            Text("Edit")
-                        }
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                        .cornerRadius(6)
+                        Image(systemName: "pencil")
+                            .font(.caption)
+                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                            .padding(6)
+                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .cornerRadius(6)
                     }
 
                     Button(action: onDelete) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash.fill")
-                            Text("Delete")
-                        }
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(6)
+                        Image(systemName: "trash.fill")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .padding(6)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(6)
                     }
                 }
             }
         }
         .padding(14)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
     }

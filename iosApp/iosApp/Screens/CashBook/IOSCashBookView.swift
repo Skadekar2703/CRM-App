@@ -24,8 +24,14 @@ struct IOSCashBookEntryItem: Identifiable {
 }
 
 struct IOSCashBookContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
+
     @State private var fromDate = "01 Aug 2026"
-    @State private var toDate = "29 Aug 2026"
+    @State private var toDate = "31 Aug 2026"
     @State private var searchQuery = ""
     @State private var showFormSheet = false
     @State private var toastMsg: String? = nil
@@ -134,7 +140,7 @@ struct IOSCashBookContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 14) {
                 // SUMMARY CARDS ROW
@@ -151,7 +157,7 @@ struct IOSCashBookContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
@@ -167,7 +173,7 @@ struct IOSCashBookContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
@@ -183,7 +189,7 @@ struct IOSCashBookContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 }
@@ -195,13 +201,13 @@ struct IOSCashBookContentView: View {
                     TextField("FROM", text: $fromDate)
                         .font(.caption)
                         .padding(8)
-                        .background(Color.white)
+                        .background(cardBg)
                         .cornerRadius(8)
 
                     TextField("TO", text: $toDate)
                         .font(.caption)
                         .padding(8)
-                        .background(Color.white)
+                        .background(cardBg)
                         .cornerRadius(8)
 
                     Button(action: { toastMsg = "Date range updated" }) {
@@ -230,7 +236,7 @@ struct IOSCashBookContentView: View {
                     }
                 }
                 .padding(10)
-                .background(Color.white)
+                .background(cardBg)
                 .cornerRadius(12)
                 .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 .padding(.horizontal, 16)
@@ -297,6 +303,10 @@ struct IOSCashBookContentView: View {
 
 struct IOSCashBookCard: View {
     let entry: IOSCashBookEntryItem
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -318,7 +328,7 @@ struct IOSCashBookCard: View {
             Text(entry.particulars)
                 .font(.headline)
                 .fontWeight(.bold)
-                .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                .foregroundColor(textPrimary)
 
             Text("Source: \(entry.sourceModule)")
                 .font(.caption2)
@@ -351,7 +361,7 @@ struct IOSCashBookCard: View {
             }
         }
         .padding(14)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
     }

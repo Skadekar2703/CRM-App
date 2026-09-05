@@ -9,6 +9,12 @@ enum class AuthScreen {
 }
 
 @JsExport
+enum class AuthRole {
+    ADMIN,
+    STAFF
+}
+
+@JsExport
 enum class AuthStatus {
     CHECKING_SESSION,
     AUTHENTICATED,
@@ -20,6 +26,8 @@ data class UserSession(
     val id: String,
     val email: String,
     val username: String? = null,
+    val role: String = "ADMIN",
+    val businessId: String? = "00000000-0000-0000-0000-000000000001",
     val accessToken: String? = null,
     val refreshToken: String? = null
 )

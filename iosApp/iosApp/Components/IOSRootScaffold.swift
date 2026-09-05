@@ -11,11 +11,17 @@ struct IOSRootScaffold<Content: View>: View {
     @State private var showProfileMenu = false
     @State private var showAiSheet = false
 
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
-    private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
-    private let purpleBg = Color(red: 124/255, green: 58/255, blue: 237/255)
-    private let bgLight = Color(red: 248/255, green: 250/255, blue: 252/255)
+    @AppStorage("crm_is_dark_mode") private var isDarkMode = false
+
+    private var textPrimary: Color {
+        isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
+    private var primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
+    private var purpleBg = Color(red: 124/255, green: 58/255, blue: 237/255)
+    private var bgLight: Color {
+        isDarkMode ? Color(red: 11/255, green: 15/255, blue: 25/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -74,7 +80,7 @@ struct IOSRootScaffold<Content: View>: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Color.white)
+                .background(isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color.white)
                 .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 2)
 
                 // SCREEN CONTENT PLACED STRICTLY BELOW TOP BAR
@@ -112,9 +118,14 @@ struct IOSRootScaffold<Content: View>: View {
 
                 SideDrawerMenuView(
                     activeSection: activeSection,
+                    userRole: userSession?.role ?? "STAFF",
+                    onLogout: {
+                        withAnimation { showSideDrawer = false }
+                        onLogout()
+                    },
                     onSelectSection: { section in
                         withAnimation { showSideDrawer = false }
-                        if section == "Sign Out" {
+                        if section == "Sign Out" || section == "Logout" {
                             onLogout()
                         } else {
                             onNavigateSection(section)

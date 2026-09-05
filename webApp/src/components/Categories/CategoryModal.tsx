@@ -5,7 +5,7 @@ interface CategoryModalProps {
   isOpen: boolean;
   editingCategory: Category | null;
   onClose: () => void;
-  onSave: (name: string, type: 'Item Category' | 'Customer Category', status: 'Active' | 'Inactive', subText?: string) => void;
+  onSave: (name: string, status: 'Active' | 'Inactive', subText?: string) => void;
 }
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -15,7 +15,6 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   onSave,
 }) => {
   const [name, setName] = useState('');
-  const [type, setType] = useState<'Item Category' | 'Customer Category'>('Item Category');
   const [status, setStatus] = useState<'Active' | 'Inactive'>('Active');
   const [subText, setSubText] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -23,12 +22,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   useEffect(() => {
     if (editingCategory) {
       setName(editingCategory.name);
-      setType(editingCategory.type);
       setStatus(editingCategory.status === 'Archived' ? 'Inactive' : editingCategory.status);
       setSubText(editingCategory.subText || '');
     } else {
       setName('');
-      setType('Item Category');
       setStatus('Active');
       setSubText('');
     }
@@ -43,7 +40,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       setErrorMsg('Category Name is required.');
       return;
     }
-    onSave(name.trim(), type, status, subText.trim() || undefined);
+    onSave(name.trim(), status, subText.trim() || undefined);
     onClose();
   };
 
@@ -73,7 +70,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             <input
               type="text"
               className="form-input"
-              placeholder="e.g. Electronics or Wholesaler"
+              placeholder="e.g. Retailer, Wholesaler, VIP, Regular"
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
@@ -84,33 +81,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Category Type *</label>
-            <div className="radio-group">
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="categoryType"
-                  value="Item Category"
-                  checked={type === 'Item Category'}
-                  onChange={() => setType('Item Category')}
-                />
-                Item Category
-              </label>
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="categoryType"
-                  value="Customer Category"
-                  checked={type === 'Customer Category'}
-                  onChange={() => setType('Customer Category')}
-                />
-                Customer Category
-              </label>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Status *</label>
+            <label className="form-label">Status</label>
             <div className="radio-group">
               <label className="radio-label">
                 <input
@@ -136,11 +107,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description / Subtext (Optional)</label>
+            <label className="form-label">Description / Remarks (Optional)</label>
             <input
               type="text"
               className="form-input"
-              placeholder="e.g. Consumer goods & tech"
+              placeholder="e.g. Bulk buyers or local accounts"
               value={subText}
               onChange={(e) => setSubText(e.target.value)}
             />

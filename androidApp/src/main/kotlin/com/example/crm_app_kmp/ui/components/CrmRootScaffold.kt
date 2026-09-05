@@ -33,6 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
@@ -67,6 +68,8 @@ fun CrmRootScaffold(
     activeSection: String,
     onNavigateSection: (String) -> Unit,
     userSession: UserSession? = null,
+    isDarkTheme: Boolean = false,
+    onToggleTheme: () -> Unit = {},
     onLogout: () -> Unit = {},
     content: @Composable () -> Unit
 ) {
@@ -76,6 +79,7 @@ fun CrmRootScaffold(
 
     val userDisplayName = userSession?.username ?: userSession?.email?.split("@")?.firstOrNull() ?: "Admin"
     val userInitial = userDisplayName.take(1).uppercase()
+    val userRole = userSession?.role?.uppercase() ?: "STAFF"
 
     androidx.activity.compose.BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
@@ -85,7 +89,7 @@ fun CrmRootScaffold(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = Color(0xFF0F172A),
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.width(280.dp)
             ) {
                 Column(
@@ -103,35 +107,45 @@ fun CrmRootScaffold(
                         CrmLogo(size = 36.dp, fontSize = 12)
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text(userDisplayName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("Management Portal", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                            Text(userDisplayName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Management Portal", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                         }
                     }
 
-                    HorizontalDivider(color = Color(0xFF1E293B), modifier = Modifier.padding(bottom = 12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
 
-                    // VERTICALLY SCROLLABLE NAVIGATION MENU
+                    // DRAWER ITEMS (SCROLLABLE)
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        CrmNavigationMenu.items.forEach { menuItem ->
+                        val visibleItems = CrmNavigationMenu.items.filter { !it.adminOnly || userRole == "ADMIN" }
+
+                        visibleItems.forEach { menuItem ->
                             val isSelected = menuItem.id.equals(activeSection, ignoreCase = true)
+                            val itemLabel = if (menuItem.id == "Dark Theme") {
+                                if (isDarkTheme) "☀️ Light Mode" else "🌙 Dark Mode"
+                            } else {
+                                menuItem.label
+                            }
+
                             NavigationDrawerItem(
                                 label = {
                                     Text(
-                                        text = menuItem.label,
-                                        color = if (isSelected) Color.White else Color(0xFF94A3B8),
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        text = itemLabel,
+                                        color = if (menuItem.id == "Logout") Color(0xFFEF4444) else if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected || menuItem.id == "Logout") FontWeight.Bold else FontWeight.Medium,
                                         fontSize = 14.sp
                                     )
                                 },
                                 selected = isSelected,
                                 onClick = {
                                     scope.launch { drawerState.close() }
-                                    if (menuItem.id == "Sign Out") {
+                                    if (menuItem.id == "Logout" || menuItem.id == "Sign Out") {
                                         onLogout()
+                                    } else if (menuItem.id == "Dark Theme") {
+                                        onToggleTheme()
                                     } else {
                                         onNavigateSection(menuItem.id)
                                     }
@@ -150,10 +164,11 @@ fun CrmRootScaffold(
         }
     ) {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 // UNIFIED TOP APP BAR ON EVERY SINGLE SCREEN
                 Surface(
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 2.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -168,12 +183,12 @@ fun CrmRootScaffold(
                             // TOP LEFT: HAMBURGER MENU BUTTON + BRANDING / SCREEN TITLE
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(
-                                    onClick = { scope.launch { drawerState.open() } }
+                                    onClick = { scope.launch { drawerState.close(); drawerState.open() } }
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Menu,
                                         contentDescription = "Open Navigation Menu",
-                                        tint = TextPrimary
+                                        tint = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
 
@@ -184,7 +199,7 @@ fun CrmRootScaffold(
                                     text = if (activeSection == "Dashboard") "CRM Dashboard" else activeSection,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
 
@@ -194,7 +209,7 @@ fun CrmRootScaffold(
                                     Icon(
                                         imageVector = Icons.Default.Notifications,
                                         contentDescription = "Notifications",
-                                        tint = TextMuted
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
 
@@ -223,9 +238,9 @@ fun CrmRootScaffold(
                                         DropdownMenuItem(
                                             text = {
                                                 Column {
-                                                    Text(userDisplayName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                    Text(userDisplayName, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                                                     userSession?.email?.let { email ->
-                                                        Text(email, fontSize = 12.sp, color = TextMuted)
+                                                        Text(email, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                     }
                                                 }
                                             },
@@ -254,7 +269,7 @@ fun CrmRootScaffold(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(Color(0xFFF8FAFC))
+                    .background(MaterialTheme.colorScheme.background)
             ) {
                 content()
 

@@ -28,7 +28,7 @@ export const DeleteCustomerDialog: React.FC<DeleteCustomerDialogProps> = ({
 
         <div className="modal-body" style={{ padding: '16px 0' }}>
           <p style={{ fontSize: '14px', color: '#334155', margin: 0 }}>
-            Are you sure you want to delete <strong>{customer.name}</strong> ({customer.uid})?
+            Are you sure you want to delete <strong>{customer.name}</strong> (ID: {customer.customerId})?
           </p>
           <p style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>
             This action cannot be undone and will remove the customer record.

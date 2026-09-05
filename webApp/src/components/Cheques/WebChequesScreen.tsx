@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Cheque, INITIAL_CHEQUES } from '../../types/cheques';
-import { ChequeModal } from './ChequeModal';
+import { ChequeModal, formatIsoToDisplay } from './ChequeModal';
 import { DeleteChequeDialog } from './DeleteChequeDialog';
 import { supabase } from '../../lib/supabase';
 import './Cheques.css';
@@ -20,6 +20,7 @@ export const WebChequesScreen: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCheque, setEditingCheque] = useState<Cheque | null>(null);
   const [deletingCheque, setDeletingCheque] = useState<Cheque | null>(null);
+  const [statusActionTarget, setStatusActionTarget] = useState<{ cheque: Cheque; nextStatus: 'Cleared' | 'Bounced' } | null>(null);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -43,8 +44,8 @@ export const WebChequesScreen: React.FC = () => {
             bankName: c.bank_name || 'HDFC Bank',
             amount: Number(c.amount || 0),
             direction: c.party_type === 'Supplier' ? 'Outward' : 'Inward',
-            issueDate: c.issue_date ? c.issue_date.split('T')[0] : 'Today',
-            dueDate: c.due_date ? c.due_date.split('T')[0] : 'Today',
+            issueDate: c.issue_date ? formatIsoToDisplay(c.issue_date) : 'Today',
+            dueDate: c.due_date ? formatIsoToDisplay(c.due_date) : 'Today',
             status: c.status || 'Pending',
             notes: c.notes || '',
             createdDate: c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Today'
@@ -63,6 +64,7 @@ export const WebChequesScreen: React.FC = () => {
   useEffect(() => {
     loadChequesFromSupabase();
   }, []);
+
 
   console.log('Loading state:', isLoading);
 
@@ -203,6 +205,34 @@ export const WebChequesScreen: React.FC = () => {
       setDeletingCheque(null);
     }
   };
+
+  const handleStatusActionClick = (cheque: Cheque, nextStatus: 'Cleared' | 'Bounced') => {
+    setStatusActionTarget({ cheque, nextStatus });
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusActionTarget) return;
+    const { cheque, nextStatus } = statusActionTarget;
+    try {
+      const isUuid = /^[0-9a-fA-F-]{36}$/.test(cheque.id);
+      if (isUuid) {
+        const { error } = await supabase
+          .from('cheques')
+          .update({ status: nextStatus })
+          .eq('id', cheque.id);
+        if (error) throw error;
+      }
+      setCheques((prev) =>
+        prev.map((c) => (c.id === cheque.id ? { ...c, status: nextStatus } : c))
+      );
+      showToast(`Cheque "${cheque.chequeNo}" marked as ${nextStatus}.`);
+    } catch (e: any) {
+      showToast(`Unable to update cheque status. Please try again.`);
+    } finally {
+      setStatusActionTarget(null);
+    }
+  };
+
 
   // EXPORT HANDLERS
   const handleExportCSV = () => {
@@ -438,7 +468,25 @@ export const WebChequesScreen: React.FC = () => {
                       </span>
                     </td>
                     <td>
-                      <div className="action-buttons-cell" style={{ justifyContent: 'flex-end' }}>
+                      <div className="action-buttons-cell" style={{ justifyContent: 'flex-end', gap: '6px' }}>
+                        {cheque.status.toLowerCase() === 'pending' && (
+                          <>
+                            <button
+                              className="btn-action-clear"
+                              onClick={() => handleStatusActionClick(cheque, 'Cleared')}
+                              title="Mark as Cleared"
+                            >
+                              ✓ Clear
+                            </button>
+                            <button
+                              className="btn-action-bounce"
+                              onClick={() => handleStatusActionClick(cheque, 'Bounced')}
+                              title="Mark as Bounced"
+                            >
+                              ✕ Bounce
+                            </button>
+                          </>
+                        )}
                         <button className="action-btn-icon" onClick={() => handleEditClick(cheque)} title="Edit Cheque">
                           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -480,6 +528,25 @@ export const WebChequesScreen: React.FC = () => {
                     ₹{cheque.amount.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
                   </div>
                 </div>
+
+                {cheque.status.toLowerCase() === 'pending' && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      className="btn-action-clear"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => handleStatusActionClick(cheque, 'Cleared')}
+                    >
+                      ✓ Mark as Cleared
+                    </button>
+                    <button
+                      className="btn-action-bounce"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => handleStatusActionClick(cheque, 'Bounced')}
+                    >
+                      ✕ Mark as Bounced
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -535,7 +602,40 @@ export const WebChequesScreen: React.FC = () => {
           onClose={() => setDeletingCheque(null)}
           onConfirm={handleConfirmDelete}
         />
+
+        {/* STATUS CONFIRMATION DIALOG */}
+        {statusActionTarget && (
+          <div className="modal-overlay" onClick={() => setStatusActionTarget(null)}>
+            <div className="modal-content" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">Confirm Status Change</h3>
+                <button className="modal-close-btn" onClick={() => setStatusActionTarget(null)}>
+                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="modal-body" style={{ padding: '16px 0' }}>
+                <p style={{ fontSize: '15px', color: '#0f172a', margin: 0, fontWeight: 600 }}>
+                  Mark this cheque as {statusActionTarget.nextStatus}?
+                </p>
+                <p style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
+                  Cheque Ref: {statusActionTarget.cheque.chequeNo} ({statusActionTarget.cheque.partyName})
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-secondary-web" onClick={() => setStatusActionTarget(null)}>
+                  Cancel
+                </button>
+                <button className="btn-primary-item" onClick={handleConfirmStatusChange}>
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+

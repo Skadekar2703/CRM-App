@@ -1,60 +1,133 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { WebCustomer } from '../../types/customers';
+import { WebCustomer, CIBIL_OPTIONS } from '../../types/customers';
 import { CustomerModal } from './CustomerModal';
-import { DeleteCustomerDialog } from './DeleteCustomerDialog';
+import { CustomerProfileModal } from './CustomerProfileModal';
+import { CustomerHistoryModal } from './CustomerHistoryModal';
+import { CustomerDeleteModal } from './CustomerDeleteModal';
 import { supabase } from '../../lib/supabase';
-import '../Udhaari/Udhaari.css';
+import { getSignedPhotoUrl } from '../../utils/photoUtils';
+
+const CustomerCardAvatar: React.FC<{ photoUrl?: string | null; name: string }> = ({ photoUrl, name }) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (photoUrl) {
+      getSignedPhotoUrl(photoUrl).then(url => setSignedUrl(url));
+    } else {
+      setSignedUrl(null);
+    }
+  }, [photoUrl]);
+
+  if (signedUrl) {
+    return <img src={signedUrl} alt={name} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #38BDF8' }} />;
+  }
+
+  const initials = name ? name.trim().substring(0, 2).toUpperCase() : 'CU';
+
+  return (
+    <div style={{
+      width: '48px',
+      height: '48px',
+      borderRadius: '50%',
+      backgroundColor: '#2563EB',
+      color: '#FFFFFF',
+      fontWeight: 800,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '16px',
+      border: '2px solid #38BDF8'
+    }}>
+      {initials}
+    </div>
+  );
+};
 
 export const WebCustomersScreen: React.FC = () => {
   const [customers, setCustomers] = useState<WebCustomer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userRole, setUserRole] = useState<'ADMIN' | 'STAFF'>('STAFF');
 
   // FILTERS
   const [areaFilter, setAreaFilter] = useState('All');
-  const [categoryFilter, setCategoryFilter] = useState('All');
   const [cibilFilter, setCibilFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [dbCategoryOptions, setDbCategoryOptions] = useState<string[]>([]);
+  const [dbAreaOptions, setDbAreaOptions] = useState<string[]>([]);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const availableAreas = useMemo(() => {
+    const areasSet = new Set<string>(dbAreaOptions);
+    customers.forEach(c => {
+      if (c.area && c.area.trim()) {
+        areasSet.add(c.area.trim());
+      }
+    });
+    return ['All', ...Array.from(areasSet).sort()];
+  }, [dbAreaOptions, customers]);
+
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // MODALS & DETAIL VIEWS
+  // MODALS
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<WebCustomer | null>(null);
-  const [deletingCustomer, setDeletingCustomer] = useState<WebCustomer | null>(null);
-  const [selectedCustomerDetails, setSelectedCustomerDetails] = useState<WebCustomer | null>(null);
+  const [profileCustomer, setProfileCustomer] = useState<WebCustomer | null>(null);
+  const [historyCustomer, setHistoryCustomer] = useState<WebCustomer | null>(null);
+  const [deleteTargetCustomer, setDeleteTargetCustomer] = useState<WebCustomer | null>(null);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  // FETCH SUPABASE DATA IF AVAILABLE
+  // FETCH SUPABASE CUSTOMERS FOR AUTHENTICATED BUSINESS
   const fetchCustomersFromSupabase = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
       if (!error && data) {
         const mapped: WebCustomer[] = data.map((item: any, idx: number) => {
-          const bal = Math.abs(Number(item.balance || item.baki || 0));
-          const bType = (item.balance_type || (Number(item.baki || 0) < 0 ? 'Jama' : 'Baki')) as 'Baki' | 'Jama';
+          const rawBaki = Number(item.baki || 0);
+          const rawJama = Number(item.jama || 0);
+          const currentBaki = rawBaki - rawJama;
+          const cid = item.customer_id || String(100001 + idx);
+          const ccode = item.customer_code || `Cd${cid.padStart(12, '0')}`;
+
           return {
-            uid: item.uid || item.id || `CUS-${32 + idx}`,
+            id: item.id,
+            customerId: cid,
+            customerCode: ccode,
             name: item.name || 'Customer',
             mobile: item.phone || item.mobile || '',
-            area: item.area || 'Local Market',
-            category: item.category || 'Regular',
-            cibilScore: item.cibil_score || 750,
-            cibilStatus: item.cibil_status || 'Good',
-            creditLimit: item.credit_limit || 50000,
-            balance: bal,
-            balanceType: bType,
-            baakiAmount: bType === 'Baki' ? bal : 0,
-            jamaAmount: bType === 'Jama' ? bal : 0,
-            lastTxnDate: item.last_txn_date || 'Recent',
-            status: item.status || 'Active'
+            alternateMobile: item.alternate_mobile || '',
+            email: item.email || '',
+            idCncNo: item.id_cnc_no || '',
+            photoUrl: item.photo_url || null,
+            cibilStatus: (item.cibil_status || 'Good') as any,
+            cibilScore: Number(item.cibil_score || 750),
+            category: item.category || 'Customer',
+            categoryId: item.category_id || null,
+            creditLimit: Number(item.credit_limit || 50000),
+            openingBalance: Number(item.opening_balance || 0),
+            taxNo: item.tax_no || '',
+            udharWapisiDin: Number(item.udhar_wapisi_din || 30),
+            address: item.address || '',
+            area: item.area || '',
+            areaId: item.area_id || null,
+            remark: item.remark || '',
+            guarantorName: item.guarantor_name || '',
+            guarantorMobile: item.guarantor_mobile || '',
+            baki: currentBaki,
+            jama: rawJama,
+            outstanding: currentBaki,
+            lastTxnDate: item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'Recent',
+            status: (item.status || 'Active') as any,
+            creditBlocked: Boolean(item.credit_blocked)
           };
         });
         setCustomers(mapped);
@@ -62,580 +135,532 @@ export const WebCustomersScreen: React.FC = () => {
         setCustomers([]);
       }
     } catch (e) {
-      console.log('Supabase read error', e);
+      console.error('Supabase read error', e);
       setCustomers([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const [businessId, setBusinessId] = useState<string>('00000000-0000-0000-0000-000000000001');
+
   useEffect(() => {
     fetchCustomersFromSupabase();
+
+    const fetchRoleAndBusiness = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: member } = await supabase
+            .from('business_members')
+            .select('role, business_id')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (member?.business_id) {
+            setBusinessId(member.business_id);
+          }
+          if (member?.role && String(member.role).toUpperCase() === 'ADMIN') {
+            setUserRole('ADMIN');
+          } else {
+            setUserRole('STAFF');
+          }
+        }
+      } catch (e) {
+        setUserRole('STAFF');
+      }
+    };
+    fetchRoleAndBusiness();
   }, []);
 
-  // CALCULATED SUMMARIES
-  const totalCustomers = customers.length;
-  const activeCustomersCount = useMemo(() => {
-    return customers.filter((c) => c.status === 'Active').length;
-  }, [customers]);
+  const handleConfirmDeleteCustomer = async (cust: WebCustomer) => {
+    if (userRole !== 'ADMIN') {
+      showToast('⚠️ Only Admin can delete customer details.');
+      return;
+    }
 
-  const totalBakiAmount = useMemo(() => {
-    return customers.reduce((sum, c) => sum + (c.baakiAmount || (c.balanceType === 'Baki' ? c.balance : 0)), 0);
-  }, [customers]);
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', cust.id);
 
-  const totalJamaAmount = useMemo(() => {
-    return customers.reduce((sum, c) => sum + (c.jamaAmount || (c.balanceType === 'Jama' ? c.balance : 0)), 0);
-  }, [customers]);
+    if (error) throw error;
 
-  // FILTER DROPDOWNS
-  const availableAreas = useMemo(() => {
-    const set = new Set(customers.map((c) => c.area));
-    return ['All', ...Array.from(set)];
-  }, [customers]);
+    showToast(`Customer "${cust.name}" deleted permanently.`);
+    fetchCustomersFromSupabase();
+  };
 
-  const availableCategories = useMemo(() => {
-    const set = new Set(customers.map((c) => c.category));
-    return ['All', ...Array.from(set)];
-  }, [customers]);
+  const handleSaveCustomer = async (data: Partial<WebCustomer>) => {
+    const activeBusinessId = businessId || '00000000-0000-0000-0000-000000000001';
 
-  // FILTERED DATA
+    if (editingCustomer) {
+      if (userRole !== 'ADMIN') {
+        showToast('⚠️ Only Admin can edit customer details.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('customers')
+        .update({
+          name: data.name,
+          phone: data.mobile,
+          alternate_mobile: data.alternateMobile,
+          email: data.email,
+          id_cnc_no: data.idCncNo,
+          customer_code: data.customerCode,
+          photo_url: data.photoUrl,
+          cibil_status: data.cibilStatus,
+          cibil_score: data.cibilScore,
+          category: data.category,
+          category_id: data.categoryId || null,
+          credit_limit: data.creditLimit,
+          opening_balance: data.openingBalance,
+          tax_no: data.taxNo,
+          udhar_wapisi_din: data.udharWapisiDin,
+          address: data.address,
+          area: data.area,
+          area_id: data.areaId || null,
+          remark: data.remark,
+          guarantor_name: data.guarantorName,
+          guarantor_mobile: data.guarantorMobile,
+          status: data.status,
+          credit_blocked: data.creditBlocked,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingCustomer.id);
+
+      if (error) throw error;
+      showToast(`Customer "${data.name}" updated successfully.`);
+    } else {
+      const { error } = await supabase.rpc('create_customer_v2', {
+        p_business_id: activeBusinessId,
+        p_customer_code: data.customerCode,
+        p_name: data.name,
+        p_phone: data.mobile,
+        p_alternate_mobile: data.alternateMobile || '',
+        p_email: data.email || '',
+        p_id_cnc_no: data.idCncNo || '',
+        p_photo_url: data.photoUrl || null,
+        p_cibil_status: data.cibilStatus || 'Good',
+        p_cibil_score: data.cibilScore || 750,
+        p_category: data.category || 'Customer',
+        p_credit_limit: data.creditLimit || 50000,
+        p_opening_balance: data.openingBalance || 0,
+        p_tax_no: data.taxNo || '',
+        p_udhar_wapisi_din: data.udharWapisiDin || 30,
+        p_address: data.address || '',
+        p_area: data.area || 'Local Market',
+        p_remark: data.remark || '',
+        p_guarantor_name: data.guarantorName || '',
+        p_guarantor_mobile: data.guarantorMobile || '',
+        p_status: data.status || 'Active',
+        p_credit_blocked: Boolean(data.creditBlocked)
+      });
+
+      if (error) throw error;
+      showToast(`New customer "${data.name}" created successfully.`);
+    }
+
+    fetchCustomersFromSupabase();
+  };
+
+  useEffect(() => {
+    supabase
+      .from('categories')
+      .select('name')
+      .order('name', { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const names = Array.from(new Set(data.map((c: any) => c.name).filter(Boolean)));
+          setDbCategoryOptions(names);
+        }
+      });
+
+    supabase
+      .from('areas')
+      .select('name')
+      .order('name', { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const names = Array.from(new Set(data.map((a: any) => a.name).filter(Boolean)));
+          setDbAreaOptions(names);
+        }
+      });
+  }, []);
+
   const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return customers.filter((c) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesQuery =
-        !q ||
-        c.uid.toLowerCase().includes(q) ||
+      const matchesSearch = !q ||
         c.name.toLowerCase().includes(q) ||
-        c.mobile.toLowerCase().includes(q) ||
+        c.customerId.toLowerCase().includes(q) ||
+        c.customerCode.toLowerCase().includes(q) ||
+        c.mobile.includes(q) ||
+        c.category.toLowerCase().includes(q) ||
         c.area.toLowerCase().includes(q);
 
       const matchesArea = areaFilter === 'All' || c.area === areaFilter;
-      const matchesCat = categoryFilter === 'All' || c.category === categoryFilter;
       const matchesCibil = cibilFilter === 'All' || c.cibilStatus === cibilFilter;
+      const matchesCategory = categoryFilter === 'All' || c.category.toLowerCase() === categoryFilter.toLowerCase();
       const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
 
-      return matchesQuery && matchesArea && matchesCat && matchesCibil && matchesStatus;
+      return matchesSearch && matchesArea && matchesCibil && matchesCategory && matchesStatus;
     });
-  }, [customers, searchQuery, areaFilter, categoryFilter, cibilFilter, statusFilter]);
+  }, [customers, searchQuery, areaFilter, cibilFilter, categoryFilter, statusFilter]);
 
-  // PAGINATION LOGIC
-  const totalEntries = filteredCustomers.length;
-  const totalPages = Math.ceil(totalEntries / itemsPerPage) || 1;
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * itemsPerPage;
-  const paginatedData = filteredCustomers.slice(startIndex, startIndex + itemsPerPage);
+  // TOP SUMMARY CARDS (EXACTLY 3)
+  const totalBaki = useMemo(() => customers.reduce((sum, c) => sum + (c.baki || 0), 0), [customers]);
+  const activeCount = useMemo(() => customers.filter((c) => (c.status || 'Active').toLowerCase() === 'active').length, [customers]);
 
-  // CRUD HANDLERS
-  const handleAddCustomerClick = () => {
-    setEditingCustomer(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEditCustomerClick = (customer: WebCustomer) => {
-    setEditingCustomer(customer);
-    setIsModalOpen(true);
-  };
-
-  const handleDeleteCustomerClick = (customer: WebCustomer) => {
-    setDeletingCustomer(customer);
-  };
-
-  const handleSaveCustomer = async (
-    name: string,
-    mobile: string,
-    area: string,
-    category: string,
-    cibilScore: number,
-    cibilStatus: 'Good' | 'Average' | 'Bad' | 'Normal',
-    creditLimit: number,
-    baaki: number,
-    jama: number,
-    status: 'Active' | 'Inactive'
-  ) => {
-    const netBaki = baaki - jama;
-    const bType: 'Baki' | 'Jama' = netBaki < 0 ? 'Jama' : 'Baki';
-    const absBal = Math.abs(netBaki);
-
-    if (editingCustomer) {
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.uid === editingCustomer.uid
-            ? {
-                ...c,
-                name,
-                mobile,
-                area,
-                category,
-                cibilScore,
-                cibilStatus,
-                creditLimit,
-                balance: absBal,
-                balanceType: bType,
-                baakiAmount: baaki,
-                jamaAmount: jama,
-                status
-              }
-            : c
-        )
-      );
-
-      // Attempt Supabase Update
-      try {
-        await supabase
-          .from('customers')
-          .update({ name, phone: mobile, area, category, credit_limit: creditLimit, baki: netBaki, status })
-          .eq('name', editingCustomer.name);
-      } catch (e) {
-        console.log('Supabase sync warning', e);
-      }
-
-      showToast(`Customer "${name}" updated.`);
-    } else {
-      const nextIdNum = 32 + customers.length;
-      const newC: WebCustomer = {
-        uid: `CUS-${nextIdNum}`,
-        name,
-        mobile,
-        area,
-        category,
-        cibilScore,
-        cibilStatus,
-        creditLimit,
-        balance: absBal,
-        balanceType: bType,
-        baakiAmount: baaki,
-        jamaAmount: jama,
-        lastTxnDate: 'Just now',
-        status
-      };
-      setCustomers((prev) => [newC, ...prev]);
-
-      // Attempt Supabase Insert
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const userId = userData?.user?.id;
-        const custPayload: any = {
-          name,
-          phone: mobile,
-          area,
-          baki: netBaki,
-          email: `${name.toLowerCase().replace(/\s+/g, '')}@crm.com`
-        };
-        if (userId) custPayload.user_id = userId;
-
-        await supabase.from('customers').insert([custPayload]);
-      } catch (e) {
-        console.log('Supabase sync warning', e);
-      }
-
-      showToast(`New customer "${name}" added.`);
+  const getCibilColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'bad': return '#EF4444';
+      case 'low': return '#F97316';
+      case 'medium': case 'average': return '#EAB308';
+      default: return '#22C55E';
     }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deletingCustomer) return;
-    const targetName = deletingCustomer.name;
-    setCustomers((prev) => prev.filter((c) => c.uid !== deletingCustomer.uid));
-
-    try {
-      await supabase.from('customers').delete().eq('name', targetName);
-    } catch (e) {
-      console.log('Supabase delete warning', e);
-    }
-
-    showToast(`Customer "${targetName}" deleted.`);
-    setDeletingCustomer(null);
-  };
-
-  // EXPORT HANDLERS
-  const handleExportCSV = () => {
-    const headers = ['UID', 'NAME', 'MOBILE', 'AREA', 'CATEGORY', 'CIBIL', 'LIMIT', 'BAAKI', 'JAMA', 'STATUS'];
-    const rows = filteredCustomers.map((c) => [
-      c.uid,
-      `"${c.name}"`,
-      `"${c.mobile}"`,
-      `"${c.area}"`,
-      `"${c.category}"`,
-      c.cibilStatus,
-      `"₹${c.creditLimit}"`,
-      `"₹${c.baakiAmount}"`,
-      `"₹${c.jamaAmount}"`,
-      c.status
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `customers_export_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Customers CSV downloaded.');
   };
 
   return (
-    <div className="crm-content">
-      <div className="udhaari-container">
-        {/* PAGE HEADER */}
-        <div className="udhaari-page-header">
-          <div>
-            <h1 className="udhaari-title-text">Customers</h1>
-            <div className="udhaari-subtitle-text">
-              Manage client records, CIBIL scores, credit limits & accounts
-            </div>
-          </div>
+    <div style={{ padding: '24px', backgroundColor: 'var(--bg-app)', minHeight: '100vh', color: 'var(--text-primary)' }}>
+      {toastMsg && (
+        <div style={{ position: 'fixed', top: '20px', right: '20px', backgroundColor: 'var(--bg-card)', color: 'var(--color-primary)', padding: '12px 20px', borderRadius: '10px', boxShadow: '0 10px 25px var(--shadow-color)', zIndex: 9999, fontWeight: 700, border: '1px solid var(--border-color)' }}>
+          ✅ {toastMsg}
+        </div>
+      )}
 
-          <div className="udhaari-header-buttons">
-            <button className="btn-secondary-udhaari" onClick={handleExportCSV}>
-              Export CSV
-            </button>
-            <button className="btn-primary-udhaari" onClick={handleAddCustomerClick}>
-              + New Customer
-            </button>
-          </div>
+      {/* HEADER SECTION */}
+      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Customer Directory</h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '4px', margin: 0 }}>
+            Manage customer cards, credit limits, account statuses, and native history statements.
+          </p>
         </div>
 
-        {/* TOAST FEEDBACK */}
-        {toastMsg && (
-          <div
-            style={{
-              backgroundColor: '#f0fdf4',
-              color: '#16a34a',
-              padding: '12px 16px',
-              borderRadius: '10px',
-              fontWeight: 600,
-              border: '1px solid #bbf7d0',
-              fontSize: '13px'
-            }}
-          >
-            ✓ {toastMsg}
-          </div>
-        )}
-
-        {/* SUMMARY CARDS */}
-        <div className="udhaari-summary-cards">
-          {/* CARD 1: TOTAL CUSTOMERS */}
-          <div className="summary-card-udhaari blue-accent">
-            <div>
-              <div className="summary-card-label">TOTAL CUSTOMERS</div>
-              <div className="summary-card-value">{totalCustomers}</div>
-            </div>
-            <div className="summary-icon-box blue-bg">
-              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-          </div>
-
-          {/* CARD 2: ACTIVE CUSTOMERS */}
-          <div className="summary-card-udhaari">
-            <div>
-              <div className="summary-card-label">ACTIVE CUSTOMERS</div>
-              <div className="summary-card-value" style={{ color: '#16a34a' }}>
-                {activeCustomersCount}
-              </div>
-            </div>
-            <div className="summary-icon-box green-bg">
-              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-
-          {/* CARD 3: TOTAL BAKI */}
-          <div className="summary-card-udhaari red-accent">
-            <div>
-              <div className="summary-card-label">TOTAL BAAKI</div>
-              <div className="summary-card-value red-text">
-                ₹{totalBakiAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="summary-icon-box red-bg">
-              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-
-          {/* CARD 4: TOTAL JAMA */}
-          <div className="summary-card-udhaari green-accent">
-            <div>
-              <div className="summary-card-label">TOTAL JAMA</div>
-              <div className="summary-card-value" style={{ color: '#16a34a' }}>
-                ₹{totalJamaAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="summary-icon-box green-bg">
-              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* MAIN DATA TABLE & TOOLBAR */}
-        <div className="udhaari-card-box">
-          <div className="udhaari-filter-toolbar">
-            <div className="udhaari-filter-dropdowns">
-              <div className="items-search-box" style={{ width: '220px' }}>
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  className="items-search-input"
-                  placeholder="Search customers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <label style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>Area:</label>
-              <select className="udhaari-select" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)}>
-                {availableAreas.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-
-              <label style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginLeft: '8px' }}>Category:</label>
-              <select className="udhaari-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                {availableCategories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-
-              <label style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginLeft: '8px' }}>CIBIL:</label>
-              <select className="udhaari-select" value={cibilFilter} onChange={(e) => setCibilFilter(e.target.value)}>
-                <option value="All">All</option>
-                <option value="Good">Good</option>
-                <option value="Average">Average</option>
-                <option value="Bad">Bad</option>
-              </select>
-
-              <label style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginLeft: '8px' }}>Status:</label>
-              <select className="udhaari-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="All">All</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* TABLE */}
-          {isLoading ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>Loading customer data...</div>
-          ) : paginatedData.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: '14px' }}>
-              No customers found.
-            </div>
-          ) : (
-            <table className="udhaari-table">
-              <thead>
-                <tr>
-                  <th>UID</th>
-                  <th>Customer Name</th>
-                  <th>Mobile</th>
-                  <th>Area</th>
-                  <th>CIBIL</th>
-                  <th>Credit Limit</th>
-                  <th>Balance</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedData.map((customer) => (
-                  <tr key={customer.uid}>
-                    <td style={{ fontWeight: 600, color: '#64748b', fontSize: '13px' }}>{customer.uid}</td>
-                    <td>
-                      <div className="udhaari-customer-cell">
-                        <div className="customer-initial-avatar">
-                          {customer.name.charAt(0).toUpperCase()}
-                        </div>
-                        {customer.name}
-                      </div>
-                    </td>
-                    <td style={{ color: '#475569', fontSize: '13px' }}>{customer.mobile}</td>
-                    <td style={{ color: '#475569', fontSize: '13px' }}>{customer.area}</td>
-                    <td>
-                      <span className={`cibil-pill ${customer.cibilStatus.toLowerCase()}`}>
-                        {customer.cibilStatus} ({customer.cibilScore})
-                      </span>
-                    </td>
-                    <td style={{ color: '#475569', fontSize: '13px' }}>
-                      ₹{customer.creditLimit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td>
-                      <span className={customer.balanceType === 'Baki' ? 'balance-red-text' : 'balance-green-text'}>
-                        ₹{customer.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} {customer.balanceType}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '3px 10px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          backgroundColor: customer.status === 'Active' ? '#dcfce7' : '#f1f5f9',
-                          color: customer.status === 'Active' ? '#16a34a' : '#64748b'
-                        }}
-                      >
-                        {customer.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons-cell" style={{ justifyContent: 'flex-end' }}>
-                        <button
-                          className="action-btn-icon"
-                          onClick={() => setSelectedCustomerDetails(customer)}
-                          title="View Details"
-                        >
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-
-                        <button
-                          className="action-btn-icon"
-                          onClick={() => handleEditCustomerClick(customer)}
-                          title="Edit Customer"
-                        >
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-
-                        <button
-                          className="action-btn-icon delete"
-                          onClick={() => handleDeleteCustomerClick(customer)}
-                          title="Delete Customer"
-                        >
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {/* PAGINATION FOOTER */}
-          <div className="items-footer">
-            <div>
-              Showing {totalEntries > 0 ? startIndex + 1 : 0} to{' '}
-              {Math.min(startIndex + itemsPerPage, totalEntries)} of {totalEntries} entries
-            </div>
-
-            <div className="pagination-group-item">
-              <button
-                className="page-btn-item"
-                disabled={safePage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  className={`page-btn-item ${safePage === p ? 'active' : ''}`}
-                  onClick={() => setCurrentPage(p)}
-                >
-                  {p}
-                </button>
-              ))}
-
-              <button
-                className="page-btn-item"
-                disabled={safePage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* MODALS */}
-        <CustomerModal
-          isOpen={isModalOpen}
-          editingCustomer={editingCustomer}
-          onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveCustomer}
-        />
-
-        <DeleteCustomerDialog
-          isOpen={deletingCustomer !== null}
-          customer={deletingCustomer}
-          onClose={() => setDeletingCustomer(null)}
-          onConfirm={handleConfirmDelete}
-        />
-
-        {/* VIEW DETAILS MODAL */}
-        {selectedCustomerDetails && (
-          <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '480px' }}>
-              <div className="modal-header">
-                <h2>Customer Details</h2>
-                <button className="modal-close-btn" onClick={() => setSelectedCustomerDetails(null)}>
-                  &times;
-                </button>
-              </div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Customer UID:</span>
-                  <span style={{ fontWeight: 700 }}>{selectedCustomerDetails.uid}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Name:</span>
-                  <span style={{ fontWeight: 700 }}>{selectedCustomerDetails.name}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Mobile:</span>
-                  <span>{selectedCustomerDetails.mobile}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Area:</span>
-                  <span>{selectedCustomerDetails.area}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>CIBIL Rating:</span>
-                  <span className={`cibil-pill ${selectedCustomerDetails.cibilStatus.toLowerCase()}`}>
-                    {selectedCustomerDetails.cibilStatus} ({selectedCustomerDetails.cibilScore})
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Credit Limit:</span>
-                  <span>₹{selectedCustomerDetails.creditLimit.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Current Balance:</span>
-                  <span style={{ fontWeight: 700, color: selectedCustomerDetails.balanceType === 'Baki' ? '#dc2626' : '#16a34a' }}>
-                    ₹{selectedCustomerDetails.balance.toLocaleString()} {selectedCustomerDetails.balanceType}
-                  </span>
-                </div>
-              </div>
-              <div className="modal-footer" style={{ marginTop: '16px' }}>
-                <button className="btn-primary-udhaari" onClick={() => setSelectedCustomerDetails(null)}>
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            setEditingCustomer(null);
+            setIsModalOpen(true);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            fontSize: '14px',
+            fontWeight: 800,
+            borderRadius: '10px',
+            backgroundColor: 'var(--color-primary)',
+            color: '#FFFFFF',
+            border: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(37,99,235,0.4)'
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>+</span> Add Customer
+        </button>
       </div>
+
+      {/* TOP SUMMARY CARDS (EXACTLY THREE) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        {/* CARD 1: TOTAL CUSTOMERS */}
+        <div style={{ backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '14px', border: '1px solid var(--border-color)', boxShadow: '0 4px 6px -1px var(--shadow-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>TOTAL CUSTOMERS</span>
+            <span style={{ fontSize: '20px' }}>👥</span>
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)' }}>{customers.length}</div>
+          <div style={{ fontSize: '12px', color: 'var(--color-primary)', fontWeight: 700, marginTop: '4px' }}>Registered Accounts</div>
+        </div>
+
+        {/* CARD 2: ACTIVE CUSTOMERS */}
+        <div style={{ backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '14px', border: '1px solid var(--border-color)', boxShadow: '0 4px 6px -1px var(--shadow-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>ACTIVE CUSTOMERS</span>
+            <span style={{ fontSize: '20px' }}>🟢</span>
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--color-jama)' }}>{activeCount}</div>
+          <div style={{ fontSize: '12px', color: 'var(--color-jama)', fontWeight: 700, marginTop: '4px' }}>In Good Standing</div>
+        </div>
+
+        {/* CARD 3: TOTAL BAKI */}
+        <div style={{ backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '14px', border: '1px solid var(--border-color)', boxShadow: '0 4px 6px -1px var(--shadow-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>TOTAL BAKI</span>
+            <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-baki)' }}>₹</span>
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--color-baki)' }}>₹{totalBaki.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: '12px', color: 'var(--color-baki)', fontWeight: 700, marginTop: '4px' }}>Total Receivable Due</div>
+        </div>
+      </div>
+
+      {/* SEARCH AND FILTERS BAR */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '12px',
+        marginBottom: '24px',
+        backgroundColor: 'var(--bg-card)',
+        padding: '16px',
+        borderRadius: '14px',
+        border: '1px solid var(--border-color)'
+      }}>
+        {/* Search Input */}
+        <div style={{ position: 'relative', gridColumn: 'span 2' }}>
+          <input
+            type="text"
+            placeholder="Search by name, ID (100003), CD Code (Cd...), mobile, or area..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: '38px', height: '42px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', width: '100%', fontSize: '13px' }}
+          />
+          <svg width="18" height="18" fill="none" stroke="var(--text-muted)" viewBox="0 0 24 24" style={{ position: 'absolute', left: '12px', top: '12px' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        {/* Area Filter */}
+        <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)} style={{ height: '42px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '13px', padding: '0 10px' }}>
+          <option value="All">Area: All Areas</option>
+          {availableAreas.filter(a => a !== 'All').map(a => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+
+        {/* CIBIL Filter */}
+        <select value={cibilFilter} onChange={(e) => setCibilFilter(e.target.value)} style={{ height: '42px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '13px', padding: '0 10px' }}>
+          <option value="All">CIBIL: All Statuses</option>
+          {CIBIL_OPTIONS.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        {/* Category Filter */}
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ height: '42px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '13px', padding: '0 10px' }}>
+          <option value="All">Category: All Categories</option>
+          {dbCategoryOptions.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+
+        {/* Status Filter */}
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ height: '42px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '13px', padding: '0 10px' }}>
+          <option value="All">Status: All</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+
+      {/* CUSTOMER CARDS GRID */}
+      {isLoading ? (
+        <div style={{ padding: '60px', textAlign: 'center', color: 'var(--color-primary)', fontWeight: 700, fontSize: '16px' }}>
+          Loading customer accounts from Supabase...
+        </div>
+      ) : filteredCustomers.length === 0 ? (
+        <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>No customers found</div>
+          <div style={{ fontSize: '13px', marginTop: '6px' }}>Try adjusting your search criteria or add a new customer card.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+          {filteredCustomers.map((cust) => {
+            const cibilColor = getCibilColor(cust.cibilStatus);
+
+            return (
+              <div
+                key={cust.id}
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  borderRadius: '16px',
+                  border: '1px solid var(--border-color)',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 4px 12px var(--shadow-color)',
+                  transition: 'transform 0.2s ease, border-color 0.2s ease'
+                }}
+              >
+                <div>
+                  {/* CARD HEADER: PHOTO + NAME + ID + MOBILE + AREA + CATEGORY */}
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '16px' }}>
+                    <CustomerCardAvatar photoUrl={cust.photoUrl} name={cust.name} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {cust.name}
+                        </h3>
+                        <span style={{ backgroundColor: 'rgba(37, 99, 235, 0.12)', color: '#2563eb', fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                          {cust.category || 'Customer'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--color-primary)', fontWeight: 700, marginTop: '2px' }}>
+                        ID: {cust.customerId}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                        Mobile: {cust.mobile || 'N/A'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                        Area: {cust.area || 'Local Market'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ height: '1px', backgroundColor: 'var(--border-color)', marginBottom: '14px' }}></div>
+
+                  {/* CIBIL SCORE & CREDIT LIMIT */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    {/* CIBIL ON SINGLE LINE */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: cibilColor, display: 'inline-block' }}></span>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: cibilColor, textTransform: 'uppercase' }}>
+                        CIBIL: {cust.cibilStatus}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Limit: <strong style={{ color: 'var(--text-primary)' }}>₹{cust.creditLimit.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+
+                  {/* BAKI & JAMA BALANCES */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                    <div style={{ backgroundColor: 'var(--bg-app)', padding: '10px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-baki)' }}>BAKI</div>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-baki)', marginTop: '2px' }}>
+                        ₹{cust.baki.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+
+                    <div style={{ backgroundColor: 'var(--bg-app)', padding: '10px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-jama)' }}>JAMA</div>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-jama)', marginTop: '2px' }}>
+                        ₹{cust.jama.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* STATUS DOT & CREDIT BLOCK BADGE */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: cust.status === 'Active' ? 'var(--color-jama)' : 'var(--text-muted)' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: cust.status === 'Active' ? 'var(--color-jama)' : 'var(--text-muted)' }}></span>
+                      Status: {cust.status}
+                    </div>
+
+                    {cust.creditBlocked && (
+                      <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: 'var(--color-baki)', fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', border: '1px solid var(--color-baki)' }}>
+                        🔒 CREDIT BLOCKED
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* FOUR ACTION BUTTONS */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setProfileCustomer(cust)}
+                    style={{ padding: '8px 4px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', backgroundColor: 'var(--bg-surface-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                  >
+                    Profile
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHistoryCustomer(cust)}
+                    style={{ padding: '8px 4px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', backgroundColor: '#7C3AED', color: '#FFFFFF', border: 'none', cursor: 'pointer' }}
+                  >
+                    History
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (userRole !== 'ADMIN') {
+                        showToast('⚠️ Only Admin can edit customer details.');
+                        return;
+                      }
+                      setEditingCustomer(cust);
+                      setIsModalOpen(true);
+                    }}
+                    style={{ padding: '8px 4px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', backgroundColor: 'var(--color-primary)', color: '#FFFFFF', border: 'none', cursor: 'pointer' }}
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (userRole !== 'ADMIN') {
+                        showToast('⚠️ Only Admin can delete customer details.');
+                        return;
+                      }
+                      setDeleteTargetCustomer(cust);
+                    }}
+                    style={{ padding: '8px 4px', fontSize: '11px', fontWeight: 800, borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: 'var(--color-baki)', border: '1px solid var(--color-baki)', cursor: 'pointer' }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODALS */}
+      <CustomerModal
+        isOpen={isModalOpen}
+        editingCustomer={editingCustomer}
+        availableAreas={availableAreas}
+        userRole={userRole}
+        businessId={businessId}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingCustomer(null);
+        }}
+        onSave={handleSaveCustomer}
+      />
+
+      {profileCustomer && (
+        <CustomerProfileModal
+          customer={profileCustomer}
+          onClose={() => setProfileCustomer(null)}
+          onEdit={() => {
+            if (userRole !== 'ADMIN') {
+              showToast('⚠️ Only Admin can edit customer details.');
+              return;
+            }
+            setEditingCustomer(profileCustomer);
+            setProfileCustomer(null);
+            setIsModalOpen(true);
+          }}
+          onOpenHistory={() => {
+            setHistoryCustomer(profileCustomer);
+            setProfileCustomer(null);
+          }}
+        />
+      )}
+
+      {historyCustomer && (
+        <CustomerHistoryModal
+          isOpen={Boolean(historyCustomer)}
+          customer={historyCustomer}
+          onClose={() => setHistoryCustomer(null)}
+        />
+      )}
+
+      {deleteTargetCustomer && (
+        <CustomerDeleteModal
+          isOpen={Boolean(deleteTargetCustomer)}
+          customer={deleteTargetCustomer}
+          userRole={userRole}
+          onClose={() => setDeleteTargetCustomer(null)}
+          onConfirmDelete={handleConfirmDeleteCustomer}
+        />
+      )}
     </div>
   );
 };

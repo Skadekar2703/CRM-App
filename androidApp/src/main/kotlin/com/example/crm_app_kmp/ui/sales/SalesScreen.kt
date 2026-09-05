@@ -92,12 +92,12 @@ fun SalesScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
     ) {
         // SEGMENTED TAB ROW
         TabRow(
             selectedTabIndex = selectedTab,
-            containerColor = Color.White,
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
             contentColor = PrimaryBlue,
             indicator = { tabPositions ->
                 TabRowDefaults.Indicator(
@@ -196,7 +196,15 @@ private fun AndroidPosView() {
 
             custRes.onSuccess { fetched ->
                 customers.clear()
-                customers.addAll(fetched)
+                customers.addAll(fetched.map { c ->
+                    CustomerModel(
+                        id = c.id,
+                        name = c.name,
+                        phone = c.mobile,
+                        email = "",
+                        area = c.area
+                    )
+                })
                 if (customers.isNotEmpty()) {
                     selectedCustomer = customers.first()
                 }
@@ -287,8 +295,8 @@ private fun AndroidPosView() {
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(if (isSelected) Color(0xFF0F172A) else Color.White)
-                            .border(1.dp, if (isSelected) Color(0xFF0F172A) else Color(0xFFCBD5E1), CircleShape)
+                            .background(if (isSelected) androidx.compose.material3.MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                            .border(1.dp, if (isSelected) androidx.compose.material3.MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.outline, CircleShape)
                             .clickable { selectedCategory = cat }
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
@@ -296,7 +304,7 @@ private fun AndroidPosView() {
                             text = cat,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isSelected) Color.White else TextPrimary
+                            color = if (isSelected) androidx.compose.material3.MaterialTheme.colorScheme.onPrimary else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -351,7 +359,7 @@ private fun AndroidPosView() {
                         .fillMaxWidth()
                         .padding(vertical = 24.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
                 ) {
                     Column(
@@ -404,7 +412,7 @@ private fun AndroidPosView() {
                     items(filteredProducts) { product ->
                         Card(
                             shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(
@@ -828,7 +836,7 @@ private fun AndroidPosView() {
         Dialog(onDismissRequest = { completedReceiptTx = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -978,7 +986,7 @@ private fun AndroidSalesHistoryView() {
                     .fillMaxWidth()
                     .clickable { selectedTx = tx },
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
@@ -1014,7 +1022,7 @@ private fun AndroidSalesHistoryView() {
         Dialog(onDismissRequest = { selectedTx = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -1080,7 +1088,7 @@ private fun StatBox(title: String, value: String, sub: String) {
             .width(150.dp)
             .height(95.dp),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(

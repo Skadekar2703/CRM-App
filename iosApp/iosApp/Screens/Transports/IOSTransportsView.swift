@@ -14,6 +14,21 @@ struct IOSTransportsView: View {
 }
 
 struct IOSTransportsContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var bgApp: Color {
+        isDarkMode ? Color(red: 11/255, green: 18/255, blue: 32/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
+    }
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white
+    }
+    private var textPrimary: Color {
+        isDarkMode ? Color(red: 248/255, green: 250/255, blue: 252/255) : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+
     @State private var transports: [IOSTransport] = [
         IOSTransport(id: "1042", transportName: "Alpha Logistics Pvt Ltd", mobile: "+1 (555) 123-4567", contactPerson: "John Doe", vehicleNumber: "Fleet: 12 Vehicles", status: "Active", createdDate: "Oct 24, 2023"),
         IOSTransport(id: "1043", transportName: "Express Cargo Co.", mobile: "+1 (555) 987-6543", contactPerson: "Sarah Smith", vehicleNumber: "Fleet: 5 Vehicles", status: "Inactive", createdDate: "Oct 25, 2023"),
@@ -38,7 +53,7 @@ struct IOSTransportsContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 14) {
                 // PAGE TITLE & SEARCH BAR
@@ -46,15 +61,16 @@ struct IOSTransportsContentView: View {
                     Text("Transports")
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(red: 15/255, green: 23/255, blue: 42/255))
+                        .foregroundColor(textPrimary)
 
                     HStack {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
+                            .foregroundColor(textMuted)
                         TextField("Search transports...", text: $searchQuery)
+                            .foregroundColor(textPrimary)
                     }
                     .padding(10)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(10)
                 }
                 .padding(.horizontal, 16)
@@ -67,7 +83,7 @@ struct IOSTransportsContentView: View {
                         .foregroundColor(Color.green)
                         .padding(10)
                         .frame(maxWidth: .infinity)
-                        .background(Color(red: 240/255, green: 253/255, blue: 244/255))
+                        .background(Color.green.opacity(0.15))
                         .cornerRadius(8)
                         .padding(.horizontal, 16)
                 }
@@ -101,35 +117,41 @@ struct IOSTransportsContentView: View {
             }) {
                 Image(systemName: "plus")
                     .font(.title2)
-                    .fontWeight(.bold)
+                    .fontWeight(.semibold)
                     .foregroundColor(.white)
                     .frame(width: 56, height: 56)
                     .background(Color.blue)
                     .clipShape(Circle())
-                    .shadow(radius: 4)
+                    .shadow(color: Color.blue.opacity(0.3), radius: 6, x: 0, y: 3)
             }
-            .padding(20)
+            .padding(.trailing, 20)
+            .padding(.bottom, 20)
+        }
+        .onAppear {
+            // loaded
         }
         .sheet(isPresented: $showFormSheet) {
             IOSTransportFormSheet(
                 transport: editingTransport,
-                onSave: { name, mobile, person, vehicle, status in
-                    if let t = editingTransport, let idx = transports.firstIndex(where: { $0.id == t.id }) {
-                        transports[idx].transportName = name
-                        transports[idx].mobile = mobile
-                        transports[idx].contactPerson = person
-                        transports[idx].vehicleNumber = vehicle
-                        transports[idx].status = status
-                        toastMsg = "Transport updated successfully"
+                onSave: { name, mobile, contact, vehicle, status in
+                    if let target = editingTransport {
+                        if let idx = transports.firstIndex(where: { $0.id == target.id }) {
+                            transports[idx].transportName = name
+                            transports[idx].mobile = mobile
+                            transports[idx].contactPerson = contact
+                            transports[idx].vehicleNumber = vehicle
+                            transports[idx].status = status
+                        }
+                        toastMsg = "Transport updated"
                     } else {
                         let newT = IOSTransport(
-                            id: "\(1040 + transports.count + 1)",
+                            id: "\(1000 + transports.count + 1)",
                             transportName: name,
                             mobile: mobile,
-                            contactPerson: person,
+                            contactPerson: contact,
                             vehicleNumber: vehicle,
                             status: status,
-                            createdDate: "Just now"
+                            createdDate: "Today"
                         )
                         transports.insert(newT, at: 0)
                         toastMsg = "New transport added"
@@ -144,7 +166,7 @@ struct IOSTransportsContentView: View {
                 message: Text("Are you sure you want to delete '\(deleteTargetTransport?.transportName ?? "")'?"),
                 primaryButton: .destructive(Text("Delete")) {
                     if let target = deleteTargetTransport {
-                        transports.removeAll { $0.id == target.id }
+                        transports.removeAll(where: { $0.id == target.id })
                         toastMsg = "Transport deleted"
                     }
                 },
@@ -165,31 +187,41 @@ struct IOSTransport: Identifiable {
 }
 
 struct IOSTransportCard: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white
+    }
+    private var textPrimary: Color {
+        isDarkMode ? Color(red: 248/255, green: 250/255, blue: 252/255) : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+
     let transport: IOSTransport
     var onEdit: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                HStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.blue.opacity(0.12))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: "bus.fill")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
+            HStack(alignment: .top) {
+                HStack(spacing: 12) {
+                    Image(systemName: "shippingbox.fill")
+                        .font(.title3)
+                        .foregroundColor(.blue)
+                        .frame(width: 42, height: 42)
+                        .background(Color.blue.opacity(0.12))
+                        .cornerRadius(10)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(transport.transportName)
                             .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundColor(Color(red: 15/255, green: 23/255, blue: 42/255))
+                            .foregroundColor(textPrimary)
                         Text(transport.vehicleNumber)
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(textMuted)
                     }
                 }
 
@@ -212,10 +244,10 @@ struct IOSTransportCard: View {
                     Label(transport.contactPerson, systemImage: "person.fill")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                        .foregroundColor(textPrimary)
                     Label(transport.mobile, systemImage: "phone.fill")
                         .font(.caption2)
-                        .foregroundColor(.gray)
+                        .foregroundColor(textMuted)
                 }
 
                 Spacer()
@@ -233,7 +265,7 @@ struct IOSTransportCard: View {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
     }

@@ -13,81 +13,112 @@ struct IOSUserManagementView: View {
     }
 }
 
-struct IOSUserItem: Identifiable {
-    let id: String
-    var username: String
-    var email: String
-    var role: String // "Admin" or "User"
-    var createdAt: String
-}
-
 struct IOSUserManagementContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var bgApp: Color {
+        isDarkMode ? Color(red: 11/255, green: 18/255, blue: 32/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
+    }
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white
+    }
+    private var textPrimary: Color {
+        isDarkMode ? Color(red: 248/255, green: 250/255, blue: 252/255) : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+    private var cardSubBg: Color {
+        isDarkMode ? Color(red: 30/255, green: 41/255, blue: 59/255) : Color(red: 241/255, green: 245/255, blue: 249/255)
+    }
+
     @State private var searchQuery = ""
     @State private var selectedRoleFilter = "All Roles"
-    @State private var showFormSheet = false
-    @State private var editingUser: IOSUserItem? = nil
-    @State private var deletingUser: IOSUserItem? = nil
-    @State private var showDeleteAlert = false
+    @State private var users: [IOSUserItem] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String? = nil
     @State private var toastMsg: String? = nil
 
-    @State private var users: [IOSUserItem] = [
-        IOSUserItem(id: "4", username: "aloo", email: "aloo1@gmail.com", role: "User", createdAt: "Jul 26, 2026"),
-        IOSUserItem(id: "3", username: "Shakir", email: "sk@gmail.com", role: "User", createdAt: "Jun 15, 2026"),
-        IOSUserItem(id: "2", username: "User", email: "abc1@gmail.com", role: "User", createdAt: "Jun 12, 2026"),
-        IOSUserItem(id: "1", username: "admin", email: "admin@example.com", role: "Admin", createdAt: "Jun 12, 2026")
-    ]
+    // DIALOG STATES
+    @State private var passwordTargetUser: IOSUserItem? = nil
+    @State private var newPasswordInput = ""
+    @State private var confirmPasswordInput = ""
+    @State private var passwordDialogError: String? = nil
+    @State private var isSubmitting = false
+
+    @State private var statusTargetUser: IOSUserItem? = nil
+    @State private var showStatusAlert = false
+
+    private var currentUserRole: String {
+        SupabaseIOSClient.shared.userRole.uppercased()
+    }
+
+    func loadUsers() {
+        isLoading = true
+        errorMessage = nil
+        SupabaseIOSClient.shared.fetchBusinessMembers { result in
+            isLoading = false
+            switch result {
+            case .success(let items):
+                self.users = items
+            case .failure(let err):
+                self.errorMessage = err.localizedDescription
+            }
+        }
+    }
 
     var filteredUsers: [IOSUserItem] {
         let q = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         return users.filter { u in
-            let matchesQ = q.isEmpty || u.id.lowercased().contains(q) || u.username.lowercased().contains(q) || u.email.lowercased().contains(q) || u.role.lowercased().contains(q)
-            let matchesRole = selectedRoleFilter == "All Roles" || u.role == selectedRoleFilter
+            let matchesQ = q.isEmpty ||
+                u.id.lowercased().contains(q) ||
+                u.username.lowercased().contains(q) ||
+                u.email.lowercased().contains(q) ||
+                u.role.lowercased().contains(q) ||
+                u.status.lowercased().contains(q)
+
+            let matchesRole = selectedRoleFilter == "All Roles" || u.role.caseInsensitiveCompare(selectedRoleFilter) == .orderedSame
             return matchesQ && matchesRole
         }
     }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 14) {
-                // HEADER & CLEAR ALL
+                // HEADER
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("User Management")
                             .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                        Text("Manage system user accounts & roles")
+                            .foregroundColor(textPrimary)
+                        Text("Manage business staff accounts & passwords")
                             .font(.caption2)
-                            .foregroundColor(.gray)
+                            .foregroundColor(textMuted)
                     }
 
                     Spacer()
 
-                    Button(action: {
-                        searchQuery = ""
-                        selectedRoleFilter = "All Roles"
-                        toastMsg = "Filters reset"
-                    }) {
-                        Text("Clear All")
-                            .font(.caption2)
+                    Button(action: { loadUsers() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
                             .fontWeight(.bold)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                            .padding(8)
+                            .background(cardSubBg)
+                            .foregroundColor(textPrimary)
                             .cornerRadius(8)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
 
-                // ROLE FILTER PICKER
+                // ROLE FILTER SEGMENTS
                 Picker("Role", selection: $selectedRoleFilter) {
                     Text("All Roles").tag("All Roles")
-                    Text("Admin").tag("Admin")
-                    Text("User").tag("User")
+                    Text("ADMIN").tag("ADMIN")
+                    Text("STAFF").tag("STAFF")
                 }
                 .pickerStyle(SegmentedPickerStyle())
                 .padding(.horizontal, 16)
@@ -95,26 +126,27 @@ struct IOSUserManagementContentView: View {
                 // SEARCH BAR
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    TextField("Search by ID, username, email or role...", text: $searchQuery)
+                        .foregroundColor(textMuted)
+                    TextField("Search by username, role or status...", text: $searchQuery)
+                        .foregroundColor(textPrimary)
                     if !searchQuery.isEmpty {
                         Button(action: { searchQuery = "" }) {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
+                                .foregroundColor(textMuted)
                         }
                     }
                 }
                 .padding(10)
-                .background(Color.white)
-                .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
+                .background(cardSubBg)
+                .cornerRadius(10)
                 .padding(.horizontal, 16)
 
+                // TOAST MESSAGE
                 if let msg = toastMsg {
                     Text("✓ \(msg)")
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(Color.green)
+                        .foregroundColor(Color(red: 22/255, green: 163/255, blue: 74/255))
                         .padding(10)
                         .frame(maxWidth: .infinity)
                         .background(Color(red: 240/255, green: 253/255, blue: 244/255))
@@ -122,194 +154,253 @@ struct IOSUserManagementContentView: View {
                         .padding(.horizontal, 16)
                 }
 
-                // USER CARDS LIST
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(filteredUsers) { user in
-                            IOSUserCard(
-                                user: user,
-                                onEdit: {
-                                    editingUser = user
-                                    showFormSheet = true
-                                },
-                                onDelete: {
-                                    deletingUser = user
-                                    showDeleteAlert = true
-                                }
-                            )
-                        }
+                // ERROR DISPLAY
+                if let err = errorMessage {
+                    HStack {
+                        Text("⚠️ \(err)")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                        Spacer()
+                        Button("Retry") { loadUsers() }
+                            .font(.caption)
+                            .fontWeight(.bold)
                     }
+                    .padding(10)
+                    .background(Color(red: 254/255, green: 242/255, blue: 242/255))
+                    .cornerRadius(8)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 80)
                 }
-            }
 
-            // FAB ADD BUTTON
-            Button(action: {
-                editingUser = nil
-                showFormSheet = true
-            }) {
-                Image(systemName: "plus")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Color.blue)
-                    .clipShape(Circle())
-                    .shadow(radius: 4)
-            }
-            .padding(20)
-        }
-        .sheet(isPresented: $showFormSheet) {
-            IOSUserFormSheet(
-                user: editingUser,
-                onSave: { username, email, role in
-                    if let target = editingUser, let idx = users.firstIndex(where: { $0.id == target.id }) {
-                        users[idx].username = username
-                        users[idx].email = email
-                        users[idx].role = role
-                        toastMsg = "User '\(username)' updated"
-                    } else {
-                        let newU = IOSUserItem(
-                            id: "\(users.count + 1)",
-                            username: username,
-                            email: email,
-                            role: role,
-                            createdAt: "29 Aug 2026"
-                        )
-                        users.insert(newU, at: 0)
-                        toastMsg = "User '\(username)' created"
+                // USERS LIST
+                if isLoading {
+                    Spacer()
+                    ProgressView("Loading business users...")
+                        .foregroundColor(textMuted)
+                    Spacer()
+                } else if filteredUsers.isEmpty {
+                    Spacer()
+                    Text("No user accounts found.")
+                        .font(.subheadline)
+                        .foregroundColor(textMuted)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(filteredUsers) { user in
+                                userCardView(user: user)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 20)
                     }
-                    showFormSheet = false
                 }
-            )
+            }
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete User Account"),
-                message: Text("Are you sure you want to delete user account '\(deletingUser?.username ?? "")' (\(deletingUser?.email ?? ""))?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deletingUser {
-                        users.removeAll { $0.id == target.id }
-                        toastMsg = "User account deleted"
+        .onAppear { loadUsers() }
+        .sheet(item: $passwordTargetUser) { target in
+            changePasswordSheet(target: target)
+        }
+        .alert(isPresented: $showStatusAlert) {
+            guard let target = statusTargetUser else {
+                return Alert(title: Text("Error"))
+            }
+            let willDisable = target.status.caseInsensitiveCompare("Active") == .orderedSame
+            let nextStatus = willDisable ? "Disabled" : "Active"
+
+            return Alert(
+                title: Text(willDisable ? "Disable Staff Account?" : "Enable Staff Account?"),
+                message: Text(willDisable ?
+                    "Disabling '\(target.username)' will block CRM login access immediately. Customer data remains safe." :
+                    "Enabling '\(target.username)' will restore login access."),
+                primaryButton: .destructive(Text(willDisable ? "Disable" : "Enable")) {
+                    isSubmitting = true
+                    SupabaseIOSClient.shared.toggleStaffStatus(targetUserId: target.id, newStatus: nextStatus) { res in
+                        isSubmitting = false
+                        switch res {
+                        case .success:
+                            toastMsg = "Staff account '\(target.username)' \(nextStatus.lowercased()) successfully."
+                            loadUsers()
+                        case .failure(let err):
+                            toastMsg = "Error: \(err.localizedDescription)"
+                        }
                     }
                 },
                 secondaryButton: .cancel()
             )
         }
     }
-}
 
-struct IOSUserCard: View {
-    let user: IOSUserItem
-    var onEdit: () -> Void
-    var onDelete: () -> Void
+    @ViewBuilder
+    private func userCardView(user: IOSUserItem) -> some View {
+        let isAdmin = user.role.uppercased() == "ADMIN"
+        let isStaff = user.role.uppercased() == "STAFF"
+        let isActive = user.status.caseInsensitiveCompare("Active") == .orderedSame
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(user.username)
                         .font(.headline)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                    Text("ID: #\(user.id) | \(user.email)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(textPrimary)
+                    Text(user.email)
+                        .font(.caption2)
+                        .foregroundColor(textMuted)
                 }
 
                 Spacer()
 
-                Text(user.role)
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(user.role == "Admin" ? Color.green.opacity(0.12) : Color.blue.opacity(0.12))
-                    .foregroundColor(user.role == "Admin" ? .green : .blue)
-                    .cornerRadius(6)
+                HStack(spacing: 6) {
+                    // ROLE BADGE
+                    Text(isAdmin ? "ADMIN" : "STAFF")
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(isAdmin ? Color.blue.opacity(0.12) : cardSubBg)
+                        .foregroundColor(isAdmin ? .blue : textMuted)
+                        .cornerRadius(6)
+
+                    // STATUS BADGE
+                    Text(isActive ? "Active" : "Disabled")
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(isActive ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
+                        .foregroundColor(isActive ? .green : .red)
+                        .cornerRadius(6)
+                }
             }
 
             Divider()
+                .background(cardSubBg)
 
             HStack {
                 Text("Created: \(user.createdAt)")
                     .font(.caption2)
-                    .foregroundColor(.gray)
+                    .foregroundColor(textMuted)
 
                 Spacer()
 
-                HStack(spacing: 8) {
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .font(.caption)
-                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                            .padding(6)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                            .cornerRadius(6)
-                    }
+                if isAdmin {
+                    Text("Admin Account")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(cardSubBg)
+                        .foregroundColor(textMuted)
+                        .cornerRadius(6)
+                } else if currentUserRole == "ADMIN" && isStaff {
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            newPasswordInput = ""
+                            confirmPasswordInput = ""
+                            passwordDialogError = nil
+                            passwordTargetUser = user
+                        }) {
+                            Text("Password")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.blue, lineWidth: 1))
+                                .foregroundColor(.blue)
+                        }
 
-                    Button(action: onDelete) {
-                        Image(systemName: "trash.fill")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(6)
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(6)
+                        Button(action: {
+                            statusTargetUser = user
+                            showStatusAlert = true
+                        }) {
+                            Text(isActive ? "Disable" : "Enable")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(isActive ? Color.red : Color.green)
+                                .foregroundColor(.white)
+                                .cornerRadius(6)
+                        }
                     }
                 }
             }
         }
         .padding(14)
-        .background(Color.white)
-        .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
+        .background(cardBg)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(isDarkMode ? 0.3 : 0.05), radius: 4, x: 0, y: 2)
     }
-}
 
-struct IOSUserFormSheet: View {
-    var user: IOSUserItem?
-    var onSave: (String, String, String) -> Void
+    @ViewBuilder
+    private func changePasswordSheet(target: IOSUserItem) -> some View {
+        VStack(spacing: 16) {
+            Text("Change Staff Password")
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(textPrimary)
 
-    @Environment(\.presentationMode) var presentationMode
-    @State private var username = ""
-    @State private var email = ""
-    @State private var role = "User"
-    @State private var password = ""
+            Text("Set a new password for staff '\(target.username)'")
+                .font(.caption)
+                .foregroundColor(textMuted)
 
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Account Credentials")) {
-                    TextField("Username / Full Name *", text: $username)
-                    TextField("Email Address *", text: $email)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
+            if let err = passwordDialogError {
+                Text("⚠️ \(err)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.red)
+            }
 
-                    Picker("Role *", selection: $role) {
-                        Text("User").tag("User")
-                        Text("Admin").tag("Admin")
+            SecureField("New Password (min 6 chars)", text: $newPasswordInput)
+                .padding(10)
+                .background(cardSubBg)
+                .cornerRadius(8)
+
+            SecureField("Confirm New Password", text: $confirmPasswordInput)
+                .padding(10)
+                .background(cardSubBg)
+                .cornerRadius(8)
+
+            HStack {
+                Button("Cancel") {
+                    passwordTargetUser = nil
+                }
+                .font(.subheadline)
+                .foregroundColor(textMuted)
+
+                Spacer()
+
+                Button(action: {
+                    if newPasswordInput.count < 6 {
+                        passwordDialogError = "Password must be at least 6 characters."
+                    } else if newPasswordInput != confirmPasswordInput {
+                        passwordDialogError = "Passwords do not match."
+                    } else {
+                        isSubmitting = true
+                        SupabaseIOSClient.shared.changeStaffPassword(targetUserId: target.id, newPassword: newPasswordInput) { res in
+                            isSubmitting = false
+                            switch res {
+                            case .success:
+                                toastMsg = "Password updated for '\(target.username)'."
+                                passwordTargetUser = nil
+                                loadUsers()
+                            case .failure(let err):
+                                passwordDialogError = err.localizedDescription
+                            }
+                        }
                     }
-
-                    if user == nil {
-                        SecureField("Password *", text: $password)
-                    }
+                }) {
+                    Text("Update Password")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                 }
             }
-            .navigationTitle(user == nil ? "Add User Account" : "Edit User Account")
-            .navigationBarItems(
-                leading: Button("Cancel") { presentationMode.wrappedValue.dismiss() },
-                trailing: Button("Save") {
-                    onSave(username, email, role)
-                }.disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || email.trimmingCharacters(in: .whitespaces).isEmpty)
-            )
-            .onAppear {
-                if let u = user {
-                    username = u.username
-                    email = u.email
-                    role = u.role
-                }
-            }
+            .padding(.top, 10)
         }
+        .padding(20)
+        .background(cardBg)
     }
 }

@@ -165,7 +165,7 @@ fun AndroidDaagContent() {
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -178,7 +178,7 @@ fun AndroidDaagContent() {
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -197,8 +197,8 @@ fun AndroidDaagContent() {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(if (activeTab == "Items") PrimaryBlue else Color.White)
-                        .border(1.dp, if (activeTab == "Items") PrimaryBlue else Color(0xFFCBD5E1), RoundedCornerShape(20.dp))
+                        .background(if (activeTab == "Items") PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                        .border(1.dp, if (activeTab == "Items") PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp))
                         .clickable { activeTab = "Items" }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
@@ -206,15 +206,15 @@ fun AndroidDaagContent() {
                         text = "All Items (${availableItems.size})",
                         fontSize = 13.sp,
                         fontWeight = if (activeTab == "Items") FontWeight.Bold else FontWeight.Medium,
-                        color = if (activeTab == "Items") Color.White else TextPrimary
+                        color = if (activeTab == "Items") Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(if (activeTab == "Movements") PrimaryBlue else Color.White)
-                        .border(1.dp, if (activeTab == "Movements") PrimaryBlue else Color(0xFFCBD5E1), RoundedCornerShape(20.dp))
+                        .background(if (activeTab == "Movements") PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                        .border(1.dp, if (activeTab == "Movements") PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp))
                         .clickable { activeTab = "Movements" }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
@@ -222,7 +222,7 @@ fun AndroidDaagContent() {
                         text = "Stock Movements (${movements.size})",
                         fontSize = 13.sp,
                         fontWeight = if (activeTab == "Movements") FontWeight.Bold else FontWeight.Medium,
-                        color = if (activeTab == "Movements") Color.White else TextPrimary
+                        color = if (activeTab == "Movements") Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -288,7 +288,7 @@ fun AndroidDaagContent() {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
                                 Column(
@@ -446,7 +446,7 @@ fun AndroidDaagContent() {
         Dialog(onDismissRequest = { deletingMovement = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -513,7 +513,7 @@ private fun StockMovementCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -683,7 +683,7 @@ private fun MovementFormDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(

@@ -173,8 +173,8 @@ fun AndroidItemsContent() {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) PrimaryBlue else Color.White)
-                            .border(1.dp, if (isSelected) PrimaryBlue else Color(0xFFCBD5E1), RoundedCornerShape(20.dp))
+                            .background(if (isSelected) PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                            .border(1.dp, if (isSelected) PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp))
                             .clickable { selectedCategoryChip = chip }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
@@ -182,7 +182,7 @@ fun AndroidItemsContent() {
                             text = chip,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else TextPrimary
+                            color = if (isSelected) Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -308,7 +308,7 @@ fun AndroidItemsContent() {
         Dialog(onDismissRequest = { deletingItem = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -371,7 +371,7 @@ private fun MobileItemCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -487,7 +487,7 @@ private fun ItemFormDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(

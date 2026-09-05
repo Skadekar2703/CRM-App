@@ -1,15 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { WebNote, INITIAL_WEB_NOTES } from '../../types/notepad';
+import { WebNote } from '../../types/notepad';
 import { NoteModal } from './NoteModal';
 import { DeleteNoteDialog } from './DeleteNoteDialog';
 import { supabase } from '../../lib/supabase';
 import '../Udhaari/Udhaari.css';
 
 export const WebNotepadScreen: React.FC = () => {
-  const [notes, setNotes] = useState<WebNote[]>(INITIAL_WEB_NOTES);
+  const [notes, setNotes] = useState<WebNote[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // MODALS
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,24 +22,37 @@ export const WebNotepadScreen: React.FC = () => {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  // FETCH FROM SUPABASE IF CONFIGURED
+  // FETCH FROM SUPABASE (SOURCE OF TRUTH)
   const fetchNotesFromSupabase = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase.from('notes').select('*');
-      if (!error && data && data.length > 0) {
-        const mapped: WebNote[] = data.map((item: any, idx: number) => ({
-          id: item.id || `NOTE-${100 + idx}`,
+      setErrorMsg(null);
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading notes from Supabase:', error);
+        setErrorMsg('Unable to load notes. Please try again.');
+        setNotes([]);
+      } else if (data) {
+        const mapped: WebNote[] = data.map((item: any) => ({
+          id: item.id,
           title: item.title || 'Untitled Note',
           content: item.content || '',
-          isUrgent: item.is_urgent || false,
+          isUrgent: item.priority === 'High' || item.is_urgent === true,
           isPinned: item.is_pinned || false,
-          createdAt: item.created_at || 'Recent'
+          createdAt: item.created_at
+            ? new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : 'Recent'
         }));
         setNotes(mapped);
       }
-    } catch (e) {
-      console.log('Supabase notes read fallback to local state', e);
+    } catch (e: any) {
+      console.error('Failed to query notes from database:', e);
+      setErrorMsg('Unable to load notes. Please try again.');
+      setNotes([]);
     } finally {
       setIsLoading(false);
     }
@@ -48,7 +62,7 @@ export const WebNotepadScreen: React.FC = () => {
     fetchNotesFromSupabase();
   }, []);
 
-  // REAL-TIME SEARCH (TITLES AND CONTENT)
+  // REAL-TIME SEARCH
   const filteredNotes = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return notes;
@@ -78,30 +92,36 @@ export const WebNotepadScreen: React.FC = () => {
 
   const handleTogglePin = async (note: WebNote) => {
     const updatedStatus = !note.isPinned;
-    setNotes((prev) =>
-      prev.map((n) => (n.id === note.id ? { ...n, isPinned: updatedStatus } : n))
-    );
-    showToast(updatedStatus ? `Note "${note.title}" pinned to top.` : `Note "${note.title}" unpinned.`);
+    const { error } = await supabase
+      .from('notes')
+      .update({ is_pinned: updatedStatus })
+      .eq('id', note.id);
 
-    try {
-      await supabase.from('notes').update({ is_pinned: updatedStatus }).eq('id', note.id);
-    } catch (e) {
-      console.log('Supabase update warning', e);
+    if (error) {
+      console.error('Failed to update pin status:', error);
+      showToast('Unable to update note pin status.');
+      return;
     }
+
+    await fetchNotesFromSupabase();
+    showToast(updatedStatus ? `Note "${note.title}" pinned to top.` : `Note "${note.title}" unpinned.`);
   };
 
   const handleToggleUrgent = async (note: WebNote) => {
     const updatedStatus = !note.isUrgent;
-    setNotes((prev) =>
-      prev.map((n) => (n.id === note.id ? { ...n, isUrgent: updatedStatus } : n))
-    );
-    showToast(updatedStatus ? `Note "${note.title}" marked as Urgent!` : `Note "${note.title}" marked Normal.`);
+    const { error } = await supabase
+      .from('notes')
+      .update({ priority: updatedStatus ? 'High' : 'Normal' })
+      .eq('id', note.id);
 
-    try {
-      await supabase.from('notes').update({ is_urgent: updatedStatus }).eq('id', note.id);
-    } catch (e) {
-      console.log('Supabase update warning', e);
+    if (error) {
+      console.error('Failed to update priority:', error);
+      showToast('Unable to update note priority.');
+      return;
     }
+
+    await fetchNotesFromSupabase();
+    showToast(updatedStatus ? `Note "${note.title}" marked as Urgent!` : `Note "${note.title}" marked Normal.`);
   };
 
   const handleSaveNote = async (
@@ -110,67 +130,79 @@ export const WebNotepadScreen: React.FC = () => {
     isUrgent: boolean,
     isPinned: boolean
   ) => {
-    if (editingNote) {
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === editingNote.id ? { ...n, title, content, isUrgent, isPinned } : n
-        )
-      );
+    if (!title.trim()) {
+      showToast('Please enter a note title.');
+      return;
+    }
 
-      try {
-        await supabase
+    setIsLoading(true);
+    try {
+      if (editingNote) {
+        const { error } = await supabase
           .from('notes')
-          .update({ title, content, is_urgent: isUrgent, is_pinned: isPinned })
-          .eq('id', editingNote.id);
-      } catch (e) {
-        console.log('Supabase update warning', e);
-      }
-
-      showToast(`Note "${title}" saved.`);
-    } else {
-      const nextId = `NOTE-${100 + notes.length + 1}`;
-      const newN: WebNote = {
-        id: nextId,
-        title,
-        content,
-        isUrgent,
-        isPinned,
-        createdAt: 'Just now'
-      };
-      setNotes((prev) => [newN, ...prev]);
-
-      try {
-        await supabase.from('notes').insert([
-          {
-            id: nextId,
-            title,
-            content,
-            is_urgent: isUrgent,
+          .update({
+            title: title.trim(),
+            content: content.trim(),
+            priority: isUrgent ? 'High' : 'Normal',
             is_pinned: isPinned
-          }
-        ]);
-      } catch (e) {
-        console.log('Supabase insert warning', e);
+          })
+          .eq('id', editingNote.id);
+
+        if (error) {
+          console.error('Supabase update note error:', error);
+          showToast('Unable to save note. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+        showToast(`Note "${title}" updated successfully.`);
+      } else {
+        const { error } = await supabase
+          .from('notes')
+          .insert([
+            {
+              title: title.trim(),
+              content: content.trim(),
+              priority: isUrgent ? 'High' : 'Normal',
+              is_pinned: isPinned
+            }
+          ]);
+
+        if (error) {
+          console.error('Supabase insert note error:', error);
+          showToast('Unable to save note. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+        showToast(`Note "${title}" saved successfully.`);
       }
 
-      showToast(`New note "${title}" created.`);
+      setIsModalOpen(false);
+      await fetchNotesFromSupabase();
+    } catch (e: any) {
+      console.error('Exception saving note to Supabase:', e);
+      showToast('Unable to save note. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleConfirmDelete = async () => {
     if (!deletingNote) return;
     const targetTitle = deletingNote.title;
-    const targetId = deletingNote.id;
-    setNotes((prev) => prev.filter((n) => n.id !== targetId));
-
     try {
-      await supabase.from('notes').delete().eq('id', targetId);
-    } catch (e) {
-      console.log('Supabase delete warning', e);
+      const { error } = await supabase.from('notes').delete().eq('id', deletingNote.id);
+      if (error) {
+        console.error('Supabase delete note error:', error);
+        showToast('Unable to delete note. Please try again.');
+        return;
+      }
+      showToast(`Note "${targetTitle}" deleted.`);
+      setDeletingNote(null);
+      await fetchNotesFromSupabase();
+    } catch (e: any) {
+      console.error('Exception deleting note:', e);
+      showToast('Unable to delete note. Please try again.');
     }
-
-    showToast(`Note "${targetTitle}" deleted.`);
-    setDeletingNote(null);
   };
 
   return (
@@ -197,16 +229,26 @@ export const WebNotepadScreen: React.FC = () => {
         {toastMsg && (
           <div
             style={{
-              backgroundColor: '#f0fdf4',
-              color: '#16a34a',
+              backgroundColor: toastMsg.includes('Unable') ? '#fef2f2' : '#f0fdf4',
+              color: toastMsg.includes('Unable') ? '#dc2626' : '#16a34a',
               padding: '12px 16px',
               borderRadius: '10px',
               fontWeight: 600,
-              border: '1px solid #bbf7d0',
+              border: `1px solid ${toastMsg.includes('Unable') ? '#fecaca' : '#bbf7d0'}`,
               fontSize: '13px'
             }}
           >
-            ✓ {toastMsg}
+            {toastMsg.includes('Unable') ? '⚠️ ' : '✓ '}{toastMsg}
+          </div>
+        )}
+
+        {/* ERROR STATE */}
+        {errorMsg && (
+          <div className="udhaari-card-box" style={{ padding: '20px', textAlign: 'center', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
+            <div style={{ color: '#dc2626', fontWeight: 700, fontSize: '15px' }}>⚠️ {errorMsg}</div>
+            <button className="btn-primary-udhaari" style={{ marginTop: '12px' }} onClick={fetchNotesFromSupabase}>
+              Retry Loading Notes
+            </button>
           </div>
         )}
 
@@ -228,7 +270,7 @@ export const WebNotepadScreen: React.FC = () => {
 
         {/* LOADING & EMPTY STATES */}
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>Loading notes...</div>
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', fontWeight: 600 }}>Loading notes from database...</div>
         ) : filteredNotes.length === 0 ? (
           <div className="udhaari-card-box" style={{ padding: '60px 20px', textAlign: 'center' }}>
             <svg
@@ -241,7 +283,7 @@ export const WebNotepadScreen: React.FC = () => {
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#334155', margin: 0 }}>No notes found</h3>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#334155', margin: 0 }}>No notes available</h3>
             <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
               {searchQuery ? `No notes matching "${searchQuery}"` : 'Create your first note to get started!'}
             </p>
@@ -254,13 +296,12 @@ export const WebNotepadScreen: React.FC = () => {
             {/* PINNED SECTION */}
             {pinnedNotes.length > 0 && (
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '12px' }}>
                   📌 PINNED NOTES ({pinnedNotes.length})
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                   {pinnedNotes.map((note) => (
-                    <NoteCard
+                    <NoteCardItem
                       key={note.id}
                       note={note}
                       onEdit={() => handleEditNoteClick(note)}
@@ -273,18 +314,17 @@ export const WebNotepadScreen: React.FC = () => {
               </div>
             )}
 
-            {/* OTHER / ALL NOTES SECTION */}
+            {/* OTHER NOTES SECTION */}
             {otherNotes.length > 0 && (
               <div>
                 {pinnedNotes.length > 0 && (
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>
-                    OTHER NOTES ({otherNotes.length})
-                  </div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '12px' }}>
+                    ALL NOTES ({otherNotes.length})
+                  </h3>
                 )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                   {otherNotes.map((note) => (
-                    <NoteCard
+                    <NoteCardItem
                       key={note.id}
                       note={note}
                       onEdit={() => handleEditNoteClick(note)}
@@ -298,27 +338,27 @@ export const WebNotepadScreen: React.FC = () => {
             )}
           </div>
         )}
-
-        {/* MODALS */}
-        <NoteModal
-          isOpen={isModalOpen}
-          editingNote={editingNote}
-          onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveNote}
-        />
-
-        <DeleteNoteDialog
-          isOpen={deletingNote !== null}
-          note={deletingNote}
-          onClose={() => setDeletingNote(null)}
-          onConfirm={handleConfirmDelete}
-        />
       </div>
+
+      {/* MODALS */}
+      <NoteModal
+        isOpen={isModalOpen}
+        editingNote={editingNote}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveNote}
+      />
+
+      <DeleteNoteDialog
+        isOpen={!!deletingNote}
+        note={deletingNote}
+        onClose={() => setDeletingNote(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 };
 
-interface NoteCardProps {
+interface NoteCardItemProps {
   note: WebNote;
   onEdit: () => void;
   onDelete: () => void;
@@ -326,7 +366,7 @@ interface NoteCardProps {
   onToggleUrgent: () => void;
 }
 
-const NoteCard: React.FC<NoteCardProps> = ({
+const NoteCardItem: React.FC<NoteCardItemProps> = ({
   note,
   onEdit,
   onDelete,
@@ -335,156 +375,51 @@ const NoteCard: React.FC<NoteCardProps> = ({
 }) => {
   return (
     <div
+      className="udhaari-card-box"
       style={{
-        backgroundColor: '#ffffff',
-        border: note.isUrgent ? '1px solid #fca5a5' : '1px solid #e2e8f0',
-        borderRadius: '16px',
-        padding: '20px',
+        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        position: 'relative',
-        boxShadow: note.isUrgent ? '0 2px 8px rgba(220, 38, 38, 0.08)' : '0 1px 4px rgba(0,0,0,0.03)',
-        transition: 'all 0.15s ease'
+        borderLeft: note.isUrgent ? '4px solid #ef4444' : '4px solid #3b82f6',
+        borderRadius: '12px'
       }}
     >
-      {/* URGENT TOP ACCENT BAR */}
-      {note.isUrgent && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '4px',
-            backgroundColor: '#dc2626',
-            borderTopLeftRadius: '16px',
-            borderTopRightRadius: '16px'
-          }}
-        />
-      )}
-
       <div>
-        {/* CARD HEADER */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: 0, lineHeight: 1.3 }}>
-            {note.title}
-          </h3>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>{note.title}</h4>
+          <div style={{ display: 'flex', gap: '6px' }}>
             <button
               onClick={onTogglePin}
-              title={note.isPinned ? 'Unpin' : 'Pin to top'}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: '16px',
-                opacity: note.isPinned ? 1 : 0.4
-              }}
+              title={note.isPinned ? 'Unpin Note' : 'Pin Note'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
             >
-              📌
+              {note.isPinned ? '📌' : '📍'}
+            </button>
+            <button
+              onClick={onToggleUrgent}
+              title={note.isUrgent ? 'Mark Normal' : 'Mark Urgent'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+            >
+              {note.isUrgent ? '🔴' : '⚪'}
             </button>
           </div>
         </div>
 
-        {/* URGENT BADGE */}
-        {note.isUrgent && (
-          <span
-            style={{
-              display: 'inline-block',
-              backgroundColor: '#fef2f2',
-              color: '#dc2626',
-              fontSize: '11px',
-              fontWeight: 800,
-              padding: '2px 8px',
-              borderRadius: '6px',
-              marginBottom: '10px',
-              border: '1px solid #fecaca'
-            }}
-          >
-            ⚠️ URGENT
-          </span>
-        )}
-
-        {/* CONTENT */}
-        <p
-          style={{
-            fontSize: '13px',
-            color: '#475569',
-            lineHeight: 1.5,
-            whiteSpace: 'pre-wrap',
-            margin: '0 0 16px 0'
-          }}
-        >
+        <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 12px 0', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
           {note.content}
         </p>
       </div>
 
-      {/* FOOTER */}
-      <div>
-        <div
-          style={{
-            height: '1px',
-            backgroundColor: '#f1f5f9',
-            margin: '0 0 12px 0'
-          }}
-        />
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>{note.createdAt}</span>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <button
-              onClick={onToggleUrgent}
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                padding: '4px 8px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: note.isUrgent ? '#fee2e2' : '#f1f5f9',
-                color: note.isUrgent ? '#dc2626' : '#64748b',
-                cursor: 'pointer'
-              }}
-            >
-              {note.isUrgent ? 'Urgent' : 'Make Urgent'}
-            </button>
-
-            <button
-              onClick={onEdit}
-              title="Edit Note"
-              style={{
-                border: 'none',
-                background: '#f1f5f9',
-                color: '#334155',
-                borderRadius: '6px',
-                padding: '5px 8px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
-            >
-              Edit
-            </button>
-
-            <button
-              onClick={onDelete}
-              title="Delete Note"
-              style={{
-                border: 'none',
-                background: '#fef2f2',
-                color: '#dc2626',
-                borderRadius: '6px',
-                padding: '5px 8px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
-            >
-              Delete
-            </button>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #f1f5f9', fontSize: '11px', color: '#94a3b8' }}>
+        <span>{note.createdAt}</span>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={onEdit} style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 700, cursor: 'pointer' }}>
+            Edit
+          </button>
+          <button onClick={onDelete} style={{ background: 'none', border: 'none', color: '#ef4444', fontWeight: 700, cursor: 'pointer' }}>
+            Delete
+          </button>
         </div>
       </div>
     </div>

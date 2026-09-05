@@ -2,7 +2,8 @@ export interface WebUser {
   id: string;
   username: string;
   email: string;
-  role: 'Admin' | 'User';
+  role: 'ADMIN' | 'STAFF' | 'Admin' | 'User';
+  status: 'Active' | 'Disabled';
   createdAt: string;
 }
 

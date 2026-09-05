@@ -344,3 +344,34 @@
     display: flex;
   }
 }
+
+/* DARK THEME OVERRIDES */
+body.dark-theme .items-title-text,
+body.dark-theme .items-subtitle,
+body.dark-theme .items-table td,
+body.dark-theme .item-name-td,
+body.dark-theme .mobile-item-name {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .items-table th {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+  border-bottom-color: #334155 !important;
+}
+
+body.dark-theme .items-card-box,
+body.dark-theme .mobile-item-card,
+body.dark-theme .page-btn-item {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+body.dark-theme .items-search-input,
+body.dark-theme .category-filter-dropdown {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+

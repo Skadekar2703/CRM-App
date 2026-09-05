@@ -231,3 +231,38 @@
   from { opacity: 0; transform: translateY(20px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* DARK THEME OVERRIDES */
+body.dark-theme .ai-chat-drawer {
+  background: #111827 !important;
+  border: 1px solid #334155 !important;
+}
+
+body.dark-theme .ai-chat-body {
+  background-color: #0b1220 !important;
+}
+
+body.dark-theme .ai-message-bubble.assistant {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+body.dark-theme .ai-suggested-container,
+body.dark-theme .ai-chat-input-box {
+  background: #111827 !important;
+  border-top-color: #334155 !important;
+}
+
+body.dark-theme .ai-suggestion-pill {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+body.dark-theme .ai-chat-input {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+

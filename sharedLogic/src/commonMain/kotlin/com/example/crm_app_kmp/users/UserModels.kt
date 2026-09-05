@@ -7,8 +7,10 @@ data class UserModel(
     val id: String,
     val username: String,
     val email: String,
-    val role: String,                   // "Admin", "User"
-    val createdAt: String = "2026-06-12"
+    val role: String,                   // "ADMIN", "STAFF"
+    val status: String = "Active",       // "Active", "Disabled"
+    val businessId: String = "00000000-0000-0000-0000-000000000001",
+    val createdAt: String = "2026-09-02"
 )
 
 @JsExport
@@ -20,11 +22,11 @@ object UserRepository {
     fun getFilteredUsers(
         searchQuery: String = "",
         roleFilter: String = "All Roles",
+        statusFilter: String = "All Status",
         dateFrom: String = "",
         dateTo: String = ""
     ): List<UserModel> {
         val q = searchQuery.lowercase().trim()
-        val roleQ = roleFilter.lowercase().trim()
 
         return initialUsers.filter { user ->
             val matchesSearch = q.isEmpty() ||
@@ -34,35 +36,39 @@ object UserRepository {
                     user.role.lowercase().contains(q)
 
             val matchesRole = roleFilter == "All Roles" || user.role.equals(roleFilter, ignoreCase = true)
-
-            val matchesDateFrom = dateFrom.isBlank() || isDateAfterOrEqual(user.createdAt, dateFrom)
-            val matchesDateTo = dateTo.isBlank() || isDateBeforeOrEqual(user.createdAt, dateTo)
-
-            matchesSearch && matchesRole && matchesDateFrom && matchesDateTo
+            val matchesStatus = statusFilter == "All Status" || user.status.equals(statusFilter, ignoreCase = true)
+            matchesSearch && matchesRole && matchesStatus
         }
     }
 
-    fun addUser(username: String, email: String, role: String): UserModel {
+    fun setUsers(users: List<UserModel>) {
+        initialUsers.clear()
+        initialUsers.addAll(users)
+    }
+
+    fun addUser(username: String, email: String, role: String, status: String = "Active"): UserModel {
         val nextId = "${initialUsers.size + 1}"
         val newUser = UserModel(
             id = nextId,
             username = username,
             email = email,
             role = role,
-            createdAt = "29 Aug 2026"
+            status = status,
+            createdAt = "02 Sep 2026"
         )
         initialUsers.add(0, newUser)
         return newUser
     }
 
-    fun updateUser(id: String, username: String, email: String, role: String): UserModel? {
+    fun updateUser(id: String, username: String, email: String, role: String, status: String = "Active"): UserModel? {
         val idx = initialUsers.indexOfFirst { it.id == id }
         if (idx >= 0) {
             val existing = initialUsers[idx]
             val updated = existing.copy(
                 username = username,
                 email = email,
-                role = role
+                role = role,
+                status = status
             )
             initialUsers[idx] = updated
             return updated
@@ -72,13 +78,5 @@ object UserRepository {
 
     fun deleteUser(id: String): Boolean {
         return initialUsers.removeAll { it.id == id }
-    }
-
-    private fun isDateAfterOrEqual(dateStr: String, fromDateStr: String): Boolean {
-        return true
-    }
-
-    private fun isDateBeforeOrEqual(dateStr: String, toDateStr: String): Boolean {
-        return true
     }
 }

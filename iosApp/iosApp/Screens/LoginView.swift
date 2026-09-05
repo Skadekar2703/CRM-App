@@ -4,8 +4,10 @@ struct LoginView: View {
     var onNavigateToSignUp: () -> Void
 
     @StateObject private var client = SupabaseIOSClient.shared
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = true
 
-    @State private var email = ""
+    @State private var selectedRole = "ADMIN"
+    @State private var username = ""
     @State private var password = ""
     @State private var rememberMe = false
     @State private var isPasswordVisible = false
@@ -13,10 +15,11 @@ struct LoginView: View {
 
     private let deepNavy = Color(red: 15/255, green: 23/255, blue: 42/255)
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
-    private let borderLight = Color(red: 226/255, green: 232/255, blue: 240/255)
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
-    private let inputBg = Color(red: 248/255, green: 250/255, blue: 252/255)
+    private let borderLight = Color(red: 51/255, green: 65/255, blue: 85/255)
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var inputBg: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 30/255, green: 41/255, blue: 59/255) : Color.white }
     private let errorRed = Color(red: 220/255, green: 38/255, blue: 38/255)
 
     var body: some View {
@@ -33,10 +36,44 @@ struct LoginView: View {
                         CRMLogoView(size: 72, fontSize: 22)
                             .padding(.top, 8)
 
-                        Text("Login")
+                        Text("Business Login")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(textPrimary)
+
+                        // Role Selector Tabs
+                        HStack(spacing: 0) {
+                            Button(action: {
+                                selectedRole = "ADMIN"
+                                localError = nil
+                            }) {
+                                Text("ADMIN LOGIN")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(selectedRole == "ADMIN" ? primaryBlue : Color.clear)
+                                    .foregroundColor(selectedRole == "ADMIN" ? .white : textMuted)
+                                    .cornerRadius(8)
+                            }
+
+                            Button(action: {
+                                selectedRole = "STAFF"
+                                localError = null
+                            }) {
+                                Text("STAFF LOGIN")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(selectedRole == "STAFF" ? primaryBlue : Color.clear)
+                                    .foregroundColor(selectedRole == "STAFF" ? .white : textMuted)
+                                    .cornerRadius(8)
+                            }
+                        }
+                        .padding(4)
+                        .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                        .cornerRadius(10)
 
                         // Error Banner
                         if let error = client.errorMessage ?? localError {
@@ -60,21 +97,20 @@ struct LoginView: View {
                                 .cornerRadius(8)
                         }
 
-                        // Email field
+                        // Username field
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Email / Username")
+                            Text("Username")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(textPrimary)
 
                             HStack(spacing: 12) {
-                                Image(systemName: "envelope.fill")
+                                Image(systemName: "person.fill")
                                     .foregroundColor(textMuted)
-                                TextField("Enter your email", text: $email)
-                                    .keyboardType(.emailAddress)
+                                TextField(selectedRole == "ADMIN" ? "admin1" : "staff01", text: $username)
                                     .autocapitalization(.none)
                                     .disableAutocorrection(true)
-                                    .onChange(of: email) { _ in localError = nil }
+                                    .onChange(of: username) { _ in localError = nil }
                             }
                             .padding()
                             .background(inputBg)
@@ -122,7 +158,7 @@ struct LoginView: View {
                             )
                         }
 
-                        // Remember Me & Forgot Password Row
+                        // Remember Me & Admin Forgot Password Row
                         HStack {
                             Button(action: {
                                 rememberMe.toggle()
@@ -138,32 +174,35 @@ struct LoginView: View {
 
                             Spacer()
 
-                            Button(action: {
-                                if email.trimmingCharacters(in: .whitespaces).isEmpty {
-                                    localError = "Please enter your email to reset password."
-                                } else {
-                                    localError = nil
-                                    client.resetPassword(email: email)
+                            if selectedRole == "ADMIN" {
+                                Button(action: {
+                                    let cleanName = username.trimmingCharacters(in: .whitespaces).lowercased()
+                                    if cleanName.isEmpty {
+                                        localError = "Please enter your admin username to reset password."
+                                    } else {
+                                        localError = nil
+                                        client.resetPassword(email: "\(cleanName)@business.crm")
+                                    }
+                                }) {
+                                    Text("Forgot Password?")
+                                        .font(.footnote)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(primaryBlue)
                                 }
-                            }) {
-                                Text("Forgot Password?")
-                                    .font(.footnote)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(primaryBlue)
                             }
                         }
                         .padding(.top, 4)
 
                         // Login Button
                         Button(action: {
-                            let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
-                            if trimmedEmail.isEmpty {
-                                localError = "Email is required."
+                            let cleanName = username.trimmingCharacters(in: .whitespaces).lowercased()
+                            if cleanName.isEmpty {
+                                localError = "Username is required."
                             } else if password.isEmpty {
                                 localError = "Password is required."
                             } else {
                                 localError = nil
-                                client.login(email: trimmedEmail, password: password)
+                                client.loginByUsername(username: cleanName, password: password, role: selectedRole)
                             }
                         }) {
                             ZStack {
@@ -171,7 +210,7 @@ struct LoginView: View {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 } else {
-                                    Text("Login")
+                                    Text("Login as \(selectedRole)")
                                         .font(.headline)
                                         .fontWeight(.bold)
                                 }
@@ -184,25 +223,9 @@ struct LoginView: View {
                         }
                         .disabled(client.isLoading)
                         .padding(.top, 8)
-
-                        // Signup Navigation Link
-                        HStack(spacing: 4) {
-                            Text("Don't have an account?")
-                                .font(.subheadline)
-                                .foregroundColor(textMuted)
-                            Button(action: onNavigateToSignUp) {
-                                Text("Sign Up")
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(primaryBlue)
-                            }
-                            .disabled(client.isLoading)
-                        }
-                        .padding(.top, 4)
-                        .padding(.bottom, 8)
                     }
                     .padding(28)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(16)
                     .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 4)
                     .frame(maxWidth: 440)

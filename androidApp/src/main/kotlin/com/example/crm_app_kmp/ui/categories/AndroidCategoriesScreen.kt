@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -60,7 +60,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.example.crm_app_kmp.categories.CategoryModel
-import com.example.crm_app_kmp.categories.CategoryRepository
 import com.example.crm_app_kmp.ui.components.CrmRootScaffold
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
@@ -93,6 +92,7 @@ fun AndroidCategoriesContent() {
     var editingCategory by remember { mutableStateOf<CategoryModel?>(null) }
     var deletingCategory by remember { mutableStateOf<CategoryModel?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    var errorToastMsg by remember { mutableStateOf<String?>(null) }
 
     fun refreshCategories() {
         scope.launch {
@@ -105,7 +105,7 @@ fun AndroidCategoriesContent() {
                         CategoryModel(
                             id = obj.optString("id", ""),
                             name = obj.optString("name", ""),
-                            type = obj.optString("type", "Item Category"),
+                            type = "Customer Category",
                             status = obj.optString("status", "Active"),
                             createdDate = "Recent",
                             usageCount = 0,
@@ -126,13 +126,10 @@ fun AndroidCategoriesContent() {
         val matchesQuery = q.isEmpty() ||
                 cat.id.lowercase().contains(q) ||
                 cat.name.lowercase().contains(q) ||
-                cat.type.lowercase().contains(q) ||
                 cat.status.lowercase().contains(q)
 
         val matchesFilter = when (selectedFilterChip) {
             "All" -> true
-            "Items" -> cat.type.equals("Item Category", ignoreCase = true)
-            "Customers" -> cat.type.equals("Customer Category", ignoreCase = true)
             "Active" -> cat.status.equals("Active", ignoreCase = true)
             else -> true
         }
@@ -144,20 +141,26 @@ fun AndroidCategoriesContent() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "Categories",
+                text = "Customer Categories",
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                fontWeight = FontWeight.ExtraBold,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Manage categories used for customer classification.",
+                fontSize = 13.sp,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search categories...", fontSize = 14.sp, color = TextMuted) },
+                placeholder = { Text("Search customer categories...", fontSize = 14.sp, color = TextMuted) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -168,13 +171,13 @@ fun AndroidCategoriesContent() {
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("All", "Items", "Customers", "Active").forEach { chip ->
+                listOf("All", "Active").forEach { chip ->
                     val isSelected = selectedFilterChip == chip
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) PrimaryBlue else Color.White)
-                            .border(1.dp, if (isSelected) PrimaryBlue else Color(0xFFCBD5E1), RoundedCornerShape(20.dp))
+                            .background(if (isSelected) PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                            .border(1.dp, if (isSelected) PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp))
                             .clickable { selectedFilterChip = chip }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
@@ -182,7 +185,7 @@ fun AndroidCategoriesContent() {
                             text = chip,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else TextPrimary
+                            color = if (isSelected) Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -204,6 +207,22 @@ fun AndroidCategoriesContent() {
                 }
             }
 
+            errorToastMsg?.let { err ->
+                Surface(
+                    color = Color(0xFFFEF2F2),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "⚠️ $err",
+                        color = ErrorRed,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
             if (filteredCategories.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -211,14 +230,14 @@ fun AndroidCategoriesContent() {
                         .padding(40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No categories found.", color = TextMuted, fontSize = 14.sp)
+                    Text("No customer categories found.", color = TextMuted, fontSize = 14.sp)
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(bottom = 80.dp)
                 ) {
-                    items(filteredCategories) { cat ->
+                    filteredCategories.forEach { cat ->
                         MobileCategoryCard(
                             category = cat,
                             onEdit = {
@@ -252,20 +271,27 @@ fun AndroidCategoriesContent() {
     if (showFormDialog) {
         CategoryFormDialog(
             editingCategory = editingCategory,
+            existingCategories = categories,
             onDismiss = { showFormDialog = false },
-            onSave = { name, type, status ->
+            onSave = { name, status ->
                 scope.launch {
+                    val trimmed = name.trim()
+                    val duplicate = categories.any { c -> c.name.equals(trimmed, ignoreCase = true) && c.id != editingCategory?.id }
+                    if (duplicate) {
+                        errorToastMsg = "Category '$trimmed' already exists."
+                        return@launch
+                    }
+
                     val payload = JSONObject().apply {
-                        put("name", name.trim())
-                        put("type", type)
+                        put("name", trimmed)
                         put("status", status)
                     }
                     if (editingCategory != null) {
                         supabaseClient.updateRecord("categories", editingCategory!!.id, payload)
-                        toastMsg = "Category '$name' updated."
+                        toastMsg = "Category '$trimmed' updated."
                     } else {
                         supabaseClient.insertRecord("categories", payload)
-                        toastMsg = "New category '$name' created."
+                        toastMsg = "New category '$trimmed' created."
                     }
                     refreshCategories()
                 }
@@ -278,7 +304,7 @@ fun AndroidCategoriesContent() {
         Dialog(onDismissRequest = { deletingCategory = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -305,11 +331,32 @@ fun AndroidCategoriesContent() {
                         Button(
                             onClick = {
                                 scope.launch {
+                                    // Delete protection check against active customers
+                                    val custRes = supabaseClient.fetchTable("customers")
+                                    var isAssigned = false
+                                    custRes.onSuccess { arr ->
+                                        for (i in 0 until arr.length()) {
+                                            val cObj = arr.getJSONObject(i)
+                                            val cCat = cObj.optString("category", "")
+                                            val cCatId = cObj.optString("category_id", "")
+                                            if (cCat.equals(target.name, ignoreCase = true) || cCatId == target.id) {
+                                                isAssigned = true
+                                                break
+                                            }
+                                        }
+                                    }
+
+                                    if (isAssigned) {
+                                        errorToastMsg = "This category is assigned to customers and cannot be deleted."
+                                        deletingCategory = null
+                                        return@launch
+                                    }
+
                                     supabaseClient.deleteRecord("categories", target.id)
+                                    toastMsg = "Category '${target.name}' deleted."
                                     refreshCategories()
+                                    deletingCategory = null
                                 }
-                                toastMsg = "Category '${target.name}' deleted."
-                                deletingCategory = null
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
                             shape = RoundedCornerShape(8.dp)
@@ -332,7 +379,7 @@ private fun MobileCategoryCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -350,18 +397,14 @@ private fun MobileCategoryCard(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val iconVector = if (category.type.contains("Item", ignoreCase = true)) Icons.Default.Inventory2 else Icons.Default.People
-                    val iconBg = if (category.type.contains("Item", ignoreCase = true)) Color(0xFFEFF6FF) else Color(0xFFF0FDF4)
-                    val iconTint = if (category.type.contains("Item", ignoreCase = true)) PrimaryBlue else Color(0xFF16A34A)
-
                     Box(
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
-                            .background(iconBg),
+                            .background(Color(0xFFF0FDF4)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(iconVector, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(20.dp))
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -377,7 +420,7 @@ private fun MobileCategoryCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${category.type} • ID: ${category.id}",
+                            text = "Customer Category",
                             fontSize = 12.sp,
                             color = TextMuted,
                             maxLines = 1,
@@ -454,18 +497,18 @@ private fun MobileCategoryCard(
 @Composable
 private fun CategoryFormDialog(
     editingCategory: CategoryModel?,
+    existingCategories: List<CategoryModel>,
     onDismiss: () -> Unit,
-    onSave: (name: String, type: String, status: String) -> Unit
+    onSave: (name: String, status: String) -> Unit
 ) {
     var name by remember { mutableStateOf(editingCategory?.name ?: "") }
-    var type by remember { mutableStateOf(editingCategory?.type ?: "Item Category") }
     var status by remember { mutableStateOf(editingCategory?.status ?: "Active") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -503,23 +546,6 @@ private fun CategoryFormDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                Text("Category Type", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = type == "Item Category",
-                        onClick = { type = "Item Category" },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                    )
-                    Text("Item", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    RadioButton(
-                        selected = type == "Customer Category",
-                        onClick = { type = "Customer Category" },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                    )
-                    Text("Customer", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-
                 Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
@@ -556,7 +582,7 @@ private fun CategoryFormDialog(
                             if (name.isBlank()) {
                                 errorMsg = "Category Name is required."
                             } else {
-                                onSave(name.trim(), type, status)
+                                onSave(name.trim(), status)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),

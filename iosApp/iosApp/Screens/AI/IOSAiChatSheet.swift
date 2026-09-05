@@ -9,6 +9,8 @@ struct IOSAiChatMessage: Identifiable {
 
 struct IOSAiChatSheet: View {
     @Environment(\.presentationMode) var presentationMode
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
     @State private var messages: [IOSAiChatMessage] = [
         IOSAiChatMessage(
             sender: "assistant",
@@ -19,8 +21,10 @@ struct IOSAiChatSheet: View {
     @State private var inputPrompt: String = ""
     @State private var isLoading: Bool = false
 
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 156/255, green: 163/255, blue: 175/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
     private let purpleBg = Color(red: 124/255, green: 58/255, blue: 237/255)
 
@@ -117,7 +121,7 @@ struct IOSAiChatSheet: View {
                                             .font(.subheadline)
                                             .foregroundColor(msg.sender == "user" ? .white : textPrimary)
                                             .padding(10)
-                                            .background(msg.sender == "user" ? primaryBlue : Color.white)
+                                            .background(msg.sender == "user" ? primaryBlue : cardBg)
                                             .cornerRadius(12)
                                     }
                                     if msg.sender == "assistant" { Spacer() }
@@ -131,7 +135,7 @@ struct IOSAiChatSheet: View {
                                         .font(.caption)
                                         .foregroundColor(textMuted)
                                         .padding(8)
-                                        .background(Color.white)
+                                        .background(cardBg)
                                         .cornerRadius(10)
                                     Spacer()
                                 }
@@ -139,7 +143,7 @@ struct IOSAiChatSheet: View {
                         }
                         .padding(12)
                     }
-                    .background(Color(red: 248/255, green: 250/255, blue: 252/255))
+                    .background(bgApp)
                     .onChange(of: messages.count) { _ in
                         if let last = messages.last {
                             proxy.scrollTo(last.id, anchor: .bottom)
@@ -154,27 +158,30 @@ struct IOSAiChatSheet: View {
                             .font(.caption2)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .background(cardBg)
+                            .foregroundColor(textPrimary)
                             .cornerRadius(12)
 
                         Button("How much does Sham owe?") { sendQuery("How much does Sham owe me?") }
                             .font(.caption2)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .background(cardBg)
+                            .foregroundColor(textPrimary)
                             .cornerRadius(12)
 
                         Button("Daag items") { sendQuery("How many items are in Daag?") }
                             .font(.caption2)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .background(cardBg)
+                            .foregroundColor(textPrimary)
                             .cornerRadius(12)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                 }
-                .background(Color.white)
+                .background(cardBg)
 
                 Divider()
 
@@ -182,7 +189,7 @@ struct IOSAiChatSheet: View {
                 HStack(spacing: 8) {
                     TextField("Ask about Baki, Jama, Daag...", text: $inputPrompt)
                         .padding(10)
-                        .background(Color(red: 248/255, green: 250/255, blue: 252/255))
+                        .background(bgApp)
                         .cornerRadius(10)
 
                     Button(action: { sendQuery(inputPrompt) }) {
@@ -196,7 +203,7 @@ struct IOSAiChatSheet: View {
                     .disabled(inputPrompt.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
                 }
                 .padding(12)
-                .background(Color.white)
+                .background(cardBg)
             }
             .navigationBarTitle("CRM AI Assistant", displayMode: .inline)
             .navigationBarItems(

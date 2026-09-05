@@ -128,13 +128,13 @@ fun AndroidSuppliersContent() {
                     modifier = Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (selectedStatusFilter != "All") PrimaryBlue.copy(alpha = 0.12f) else Color.White)
-                        .border(1.dp, if (selectedStatusFilter != "All") PrimaryBlue else Color(0xFFCBD5E1), RoundedCornerShape(12.dp))
+                        .background(if (selectedStatusFilter != "All") PrimaryBlue.copy(alpha = 0.12f) else androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                        .border(1.dp, if (selectedStatusFilter != "All") PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                 ) {
                     Icon(
                         Icons.Default.Tune,
                         contentDescription = "Filter",
-                        tint = if (selectedStatusFilter != "All") PrimaryBlue else TextPrimary
+                        tint = if (selectedStatusFilter != "All") PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -270,7 +270,7 @@ fun AndroidSuppliersContent() {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(if (isSelected) PrimaryBlue else Color(0xFFF1F5F9))
+                                .background(if (isSelected) PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { selectedStatusFilter = status }
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -278,7 +278,7 @@ fun AndroidSuppliersContent() {
                                 text = status,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextPrimary
+                                color = if (isSelected) Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -341,7 +341,7 @@ fun AndroidSuppliersContent() {
         Dialog(onDismissRequest = { deletingSupplier = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -399,7 +399,7 @@ private fun SupplierCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -559,7 +559,7 @@ private fun SupplierFormDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(

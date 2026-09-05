@@ -41,6 +41,9 @@ fun AuthApp() {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
 
+    val prefs = remember { context.getSharedPreferences("crm_prefs", android.content.Context.MODE_PRIVATE) }
+    var isDarkTheme by remember { mutableStateOf(prefs.getBoolean("dark_mode", false)) }
+
     LaunchedEffect(Unit) {
         val restored = supabaseClient.restoreSession()
         if (restored != null) {
@@ -49,7 +52,7 @@ fun AuthApp() {
         isInitialLoading = false
     }
 
-    CrmTheme {
+    CrmTheme(darkTheme = isDarkTheme) {
         if (isInitialLoading) {
             Box(
                 modifier = Modifier
@@ -66,6 +69,12 @@ fun AuthApp() {
         } else if (currentSession != null) {
             com.example.crm_app_kmp.ui.dashboard.AndroidDashboardScreen(
                 userSession = currentSession!!,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = {
+                    val newTheme = !isDarkTheme
+                    isDarkTheme = newTheme
+                    prefs.edit().putBoolean("dark_mode", newTheme).apply()
+                },
                 onLogout = {
                     supabaseClient.logout()
                     currentSession = null
@@ -82,12 +91,12 @@ fun AuthApp() {
                         successMessage = null
                         currentScreen = AuthScreen.SIGN_UP
                     },
-                    onLoginClick = { email, password ->
+                    onLoginClick = { username, password, role ->
                         scope.launch {
                             isAuthLoading = true
                             errorMessage = null
                             successMessage = null
-                            val result = supabaseClient.login(email, password)
+                            val result = supabaseClient.loginByUsername(username, password, role)
                             isAuthLoading = false
                             result.onSuccess { session ->
                                 currentSession = session

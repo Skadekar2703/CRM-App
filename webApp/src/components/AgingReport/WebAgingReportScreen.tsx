@@ -142,9 +142,9 @@ export const WebAgingReportScreen: React.FC = () => {
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Oldest / overdue</div>
           </div>
 
-          {/* CARD 5: TOTAL OUTSTANDING */}
+          {/* CARD 5: TOTAL BAKI */}
           <div className="udhaari-card-box">
-            <div className="udhaari-stat-label">TOTAL OUTSTANDING</div>
+            <div className="udhaari-stat-label">TOTAL BAKI</div>
             <div className="udhaari-stat-value text-red" style={{ fontSize: '22px' }}>
               ₹{summary.totalOutstanding.toFixed(2)}
             </div>
@@ -197,7 +197,7 @@ export const WebAgingReportScreen: React.FC = () => {
           ) : filteredCustomers.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '50px 20px', color: '#64748b' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#334155', margin: 0 }}>No receivables found</h3>
-              <p style={{ fontSize: '13px', marginTop: '4px' }}>There are no outstanding customer balances for this query.</p>
+              <p style={{ fontSize: '13px', marginTop: '4px' }}>There are no active customer baki records for this query.</p>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>

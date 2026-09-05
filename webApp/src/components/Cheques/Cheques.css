@@ -253,3 +253,124 @@
     display: flex;
   }
 }
+
+/* DARK THEME OVERRIDES */
+body.dark-theme .cheques-title-text,
+body.dark-theme .cheques-subtitle,
+body.dark-theme .cheques-table td,
+body.dark-theme .mobile-party-name,
+body.dark-theme .mobile-cheque-amount,
+body.dark-theme .cheque-party-td {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .cheques-table th {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+  border-bottom-color: #334155 !important;
+}
+
+body.dark-theme .cheques-card-box,
+body.dark-theme .summary-card-cheque,
+body.dark-theme .mobile-cheque-card {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+body.dark-theme .cheques-search-input,
+body.dark-theme .cheques-filter-dropdown {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+/* DATE PICKER STYLES */
+.date-picker-input-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  min-height: 42px;
+  box-sizing: border-box;
+}
+
+.date-picker-value-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.date-picker-calendar-icon {
+  font-size: 16px;
+  margin-left: 8px;
+}
+
+.date-input-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* CHEQUE ROW ACTIONS (CLEAR & BOUNCE) */
+.btn-action-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-action-clear:hover {
+  background-color: #dcfce7;
+  border-color: #86efac;
+}
+
+.btn-action-bounce {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-action-bounce:hover {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* DARK THEME FOR DATE PICKER */
+body.dark-theme .date-picker-input-field {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+body.dark-theme .date-picker-value-text {
+  color: #f8fafc !important;
+}
+
+

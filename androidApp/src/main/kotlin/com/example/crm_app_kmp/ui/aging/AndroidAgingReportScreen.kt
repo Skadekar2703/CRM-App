@@ -73,7 +73,7 @@ fun AndroidAgingReportContent() {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -84,7 +84,7 @@ fun AndroidAgingReportContent() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("TOTAL OUTSTANDING", fontSize = 11.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                    Text("TOTAL BAKI", fontSize = 11.sp, color = TextMuted, fontWeight = FontWeight.Bold)
                     Text("₹${summary.totalOutstanding.toInt()}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
                     Text("${summary.customerCount} customers with baki", fontSize = 11.sp, color = TextMuted)
                 }
@@ -109,7 +109,7 @@ fun AndroidAgingReportContent() {
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
@@ -123,7 +123,7 @@ fun AndroidAgingReportContent() {
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
@@ -137,7 +137,7 @@ fun AndroidAgingReportContent() {
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
@@ -151,7 +151,7 @@ fun AndroidAgingReportContent() {
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
@@ -220,7 +220,7 @@ private fun AgingCustomerCard(customer: AgingCustomer) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -273,7 +273,7 @@ private fun AgingCustomerCard(customer: AgingCustomer) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("OUTSTANDING BALANCE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                    Text("TOTAL BAKI", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
                     Text("₹${customer.balance.toInt()}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
                 }
 

@@ -4,11 +4,13 @@ struct DashboardView: View {
     let session: UserSessionIOS
     var onLogout: () -> Void
 
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
     private let deepNavy = Color(red: 15/255, green: 23/255, blue: 42/255)
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
-    private let cardBg = Color.white
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 156/255, green: 163/255, blue: 175/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
 
     var body: some View {
         ZStack {

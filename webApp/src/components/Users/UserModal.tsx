@@ -1,30 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { WebUser } from '../../types/users';
+import { FormField, Input, Select } from '../common/form';
 
 interface UserModalProps {
   isOpen: boolean;
   editingUser: WebUser | null;
   onClose: () => void;
-  onSave: (username: string, email: string, role: 'Admin' | 'User', password?: string) => void;
+  onSave: (username: string, role: 'ADMIN' | 'STAFF', password?: string) => void;
 }
 
 export const UserModal: React.FC<UserModalProps> = ({ isOpen, editingUser, onClose, onSave }) => {
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'Admin' | 'User'>('User');
+  const [role, setRole] = useState<'ADMIN' | 'STAFF'>('STAFF');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (editingUser) {
       setUsername(editingUser.username);
-      setEmail(editingUser.email);
-      setRole(editingUser.role);
+      const r = String(editingUser.role).toUpperCase();
+      setRole(r === 'ADMIN' ? 'ADMIN' : 'STAFF');
       setPassword('');
     } else {
       setUsername('');
-      setEmail('');
-      setRole('User');
+      setRole('STAFF');
       setPassword('');
     }
     setErrorMsg('');
@@ -38,16 +37,16 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, editingUser, onClo
       setErrorMsg('Username is required');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMsg('Valid Email address is required');
+    if (password.trim() && password.trim().length < 6) {
+      setErrorMsg('Password must be at least 6 characters');
       return;
     }
     if (!editingUser && !password.trim()) {
-      setErrorMsg('Password is required for new users');
+      setErrorMsg('Password is required for new accounts');
       return;
     }
 
-    onSave(username.trim(), email.trim(), role, password.trim());
+    onSave(username.trim().toLowerCase(), role, password.trim());
     onClose();
   };
 
@@ -55,7 +54,7 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, editingUser, onClo
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '480px' }}>
         <div className="modal-header">
-          <h2>{editingUser ? 'Edit User' : 'Add New User'}</h2>
+          <h2>{editingUser ? `Change Password / Edit "${editingUser.username}"` : 'Create Staff / User Account'}</h2>
           <button className="modal-close-btn" onClick={onClose}>
             &times;
           </button>
@@ -68,62 +67,44 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, editingUser, onClo
         )}
 
         <form onSubmit={handleSubmit} className="modal-body">
-          <div className="form-group">
-            <label>Username / Name *</label>
-            <input
+          <FormField label="Username" required>
+            <Input
               type="text"
-              className="form-control"
-              placeholder="e.g. Shakir or admin"
+              placeholder="e.g. staff01 or admin1"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              disabled={!!editingUser}
               required
             />
-          </div>
+          </FormField>
 
-          <div className="form-group">
-            <label>Email Address *</label>
-            <input
-              type="email"
-              className="form-control"
-              placeholder="e.g. sk@gmail.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>User Role *</label>
-            <select
-              className="form-control"
+          <FormField label="User Role" required>
+            <Select
               value={role}
-              onChange={(e) => setRole(e.target.value as 'Admin' | 'User')}
-            >
-              <option value="User">User</option>
-              <option value="Admin">Admin</option>
-            </select>
-          </div>
+              onChange={(e) => setRole(e.target.value as 'ADMIN' | 'STAFF')}
+              options={[
+                { value: 'STAFF', label: 'STAFF' },
+                { value: 'ADMIN', label: 'ADMIN' },
+              ]}
+            />
+          </FormField>
 
-          {!editingUser && (
-            <div className="form-group">
-              <label>Password *</label>
-              <input
-                type="password"
-                className="form-control"
-                placeholder="Enter account password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required={!editingUser}
-              />
-            </div>
-          )}
+          <FormField label={editingUser ? 'Set New Password (optional)' : 'Account Password'} required={!editingUser}>
+            <Input
+              type="password"
+              placeholder={editingUser ? 'Leave blank to keep existing password' : 'Minimum 6 characters'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required={!editingUser}
+            />
+          </FormField>
 
-          <div className="modal-footer" style={{ marginTop: '16px' }}>
+          <div className="modal-footer" style={{ marginTop: '20px' }}>
             <button type="button" className="btn-secondary-udhaari" onClick={onClose}>
               Cancel
             </button>
             <button type="submit" className="btn-primary-udhaari" style={{ backgroundColor: '#2563eb' }}>
-              {editingUser ? 'Save Changes' : 'Create User'}
+              {editingUser ? 'Save Password / Role' : 'Create Account'}
             </button>
           </div>
         </form>

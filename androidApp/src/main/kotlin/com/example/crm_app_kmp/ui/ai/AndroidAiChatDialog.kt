@@ -138,23 +138,19 @@ fun AndroidAiChatDialog(
 
                             if (lower.contains(name.lowercase())) {
                                 targetCust = name
-                                custBaki = if (b >= 0) b else 0.0
-                                custJama = if (b < 0) kotlin.math.abs(b) else j
+                                custBaki = b
+                                custJama = j
                             }
                         }
 
                         if (targetCust != null) {
-                            val out = custBaki - custJama
                             reply = "Customer Financial Details for $targetCust:\n" +
                                     "• Total Baki (Debt): ${UdhaariCurrencyFormatter.formatIndianCurrency(custBaki)}\n" +
-                                    "• Total Jama (Paid): ${UdhaariCurrencyFormatter.formatIndianCurrency(custJama)}\n" +
-                                    "• Net Outstanding: ${UdhaariCurrencyFormatter.formatIndianCurrency(out)}"
+                                    "• Total Jama (Paid): ${UdhaariCurrencyFormatter.formatIndianCurrency(custJama)}"
                         } else {
-                            val totalOut = totalBaki - totalJama
                             reply = "Overall Udhaari Summary:\n" +
                                     "• Total Baki: ${UdhaariCurrencyFormatter.formatIndianCurrency(totalBaki)}\n" +
-                                    "• Total Jama: ${UdhaariCurrencyFormatter.formatIndianCurrency(totalJama)}\n" +
-                                    "• Net Outstanding: ${UdhaariCurrencyFormatter.formatIndianCurrency(totalOut)}"
+                                    "• Total Jama: ${UdhaariCurrencyFormatter.formatIndianCurrency(totalJama)}"
                         }
                     }
                 } else if (lower.contains("daag")) {
@@ -198,7 +194,7 @@ fun AndroidAiChatDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -261,7 +257,7 @@ fun AndroidAiChatDialog(
                     state = listState,
                     modifier = Modifier
                         .weight(1f)
-                        .background(Color(0xFFF8FAFC))
+                        .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -272,24 +268,21 @@ fun AndroidAiChatDialog(
                             contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
                         ) {
                             Surface(
-                                color = if (isUser) PrimaryBlue else Color.White,
+                                color = if (isUser) PrimaryBlue else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(
                                     topStart = 14.dp,
                                     topEnd = 14.dp,
                                     bottomStart = if (isUser) 14.dp else 2.dp,
                                     bottomEnd = if (isUser) 2.dp else 14.dp
                                 ),
-                                shadowElevation = if (isUser) 0.dp else 1.dp,
-                                modifier = Modifier.fillMaxWidth(0.85f)
+                                shadowElevation = 1.dp
                             ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        text = msg.text,
-                                        color = if (isUser) Color.White else TextPrimary,
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp
-                                    )
-                                }
+                                Text(
+                                    text = msg.text,
+                                    fontSize = 13.sp,
+                                    color = if (isUser) Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(12.dp)
+                                )
                             }
                         }
                     }

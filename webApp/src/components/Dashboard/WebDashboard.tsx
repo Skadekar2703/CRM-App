@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { WebSidebar } from './WebSidebar';
 import { WebDashboardView } from './WebDashboardView';
 import { WebSalesScreen } from '../Sales/WebSalesScreen';
@@ -20,6 +21,7 @@ import { WebCashBookScreen } from '../CashBook/WebCashBookScreen';
 import { WebProfitLossScreen } from '../ProfitLoss/WebProfitLossScreen';
 import { WebAgingReportScreen } from '../AgingReport/WebAgingReportScreen';
 import { WebUserManagementScreen } from '../Users/WebUserManagementScreen';
+import { WebSettingsScreen } from '../Settings/WebSettingsScreen';
 import { WebAiFloatingButton } from '../AI/WebAiFloatingButton';
 import { WebAiChatModal } from '../AI/WebAiChatModal';
 import './WebDashboard.css';
@@ -31,27 +33,22 @@ interface WebDashboardProps {
 }
 
 export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username, onLogout }) => {
+  const [userRole, setUserRole] = useState<'ADMIN' | 'STAFF'>('STAFF');
+
   const getInitialSection = () => {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'users' || hash === 'user-management' || hash === 'usermanagement') return 'Users';
-    if (hash === 'aging report' || hash === 'aging-report' || hash === 'agingreport' || hash === 'aging') return 'Aging Report';
-    if (hash === 'profit & loss' || hash === 'profit-and-loss' || hash === 'pnl' || hash === 'profitloss') return 'Profit & Loss';
-    if (hash === 'cash book' || hash === 'cash-book' || hash === 'cashbook') return 'Cash Book';
-    if (hash === 'supplier ledger' || hash === 'supplier-ledger' || hash === 'supplierledger') return 'Supplier Ledger';
-    if (hash === 'expenses') return 'Expenses';
+    if (hash === 'settings') return 'Settings';
     if (hash === 'reminders') return 'Reminders';
     if (hash === 'notepad' || hash === 'notes') return 'Notepad';
-    if (hash === 'daag') return 'Daag';
-    if (hash === 'employees') return 'Employees';
-    if (hash === 'suppliers') return 'Suppliers';
-    if (hash === 'customers') return 'Customers';
-    if (hash === 'cheques') return 'Cheques';
-    if (hash === 'udhaari') return 'Udhaari';
-    if (hash === 'items') return 'Items';
-    if (hash === 'transports') return 'Transports';
-    if (hash === 'categories') return 'Categories';
     if (hash === 'areas') return 'Areas';
-    if (hash === 'sales') return 'Sales';
+    if (hash === 'categories' || hash === 'category' || hash === 'customer-categories') return 'Categories';
+    if (hash === 'expenses') return 'Expenses';
+    if (hash === 'cash book' || hash === 'cash-book' || hash === 'cashbook') return 'Cash Book';
+    if (hash === 'cheques') return 'Cheques';
+    if (hash === 'profit & loss' || hash === 'profit-and-loss' || hash === 'pnl' || hash === 'profitloss') return 'Profit & Loss';
+    if (hash === 'udhaari') return 'Udhaari';
+    if (hash === 'customers' || hash === 'customer' || hash === 'customer-management') return 'Customers';
     if (hash === 'dashboard') return 'Dashboard';
     return 'Dashboard';
   };
@@ -60,7 +57,82 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const userDisplayName = username || userEmail.split('@')[0];
 
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActiveSectionState(getInitialSection());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: member } = await supabase
+            .from('business_members')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (member?.role && String(member.role).toUpperCase() === 'ADMIN') {
+            setUserRole('ADMIN');
+          } else {
+            setUserRole('STAFF');
+            // Protect against manual URL entry to Users screen for STAFF
+            if (activeSection === 'Users') {
+              setActiveSectionState('Dashboard');
+              window.location.hash = 'dashboard';
+            }
+          }
+        }
+      } catch (e) {
+        setUserRole('STAFF');
+      }
+    };
+    fetchUserRole();
+  }, [activeSection]);
+
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('crm_theme') === 'dark';
+  });
+
+  useEffect(() => {
+    const themeStr = isDarkMode ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', themeStr);
+    if (isDarkMode) {
+      document.body.classList.add('dark-theme');
+      localStorage.setItem('crm_theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-theme');
+      localStorage.setItem('crm_theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const handleToggleTheme = () => {
+    setIsDarkMode(prev => !prev);
+  };
+
+  const handleLogoutAction = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Logout error:', e);
+    } finally {
+      localStorage.removeItem('supabase.auth.token');
+      window.location.hash = '';
+      onLogout();
+    }
+  };
+
   const handleSelectSection = (section: string) => {
+    if (section === 'Users' && userRole !== 'ADMIN') {
+      setActiveSectionState('Dashboard');
+      window.location.hash = 'dashboard';
+      return;
+    }
     setActiveSectionState(section);
     window.location.hash = section.toLowerCase();
   };
@@ -72,6 +144,10 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
         activeSection={activeSection}
         onSelectSection={handleSelectSection}
         userDisplayName={userDisplayName}
+        userRole={userRole}
+        isDarkMode={isDarkMode}
+        onToggleTheme={handleToggleTheme}
+        onLogout={handleLogoutAction}
       />
 
       {/* MAIN CONTAINER */}
@@ -94,7 +170,7 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
               {userDisplayName.charAt(0).toUpperCase()}
             </div>
 
-            <button className="logout-link" onClick={onLogout}>
+            <button className="logout-link" onClick={handleLogoutAction}>
               Logout
             </button>
           </div>
@@ -141,6 +217,8 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
           <WebAgingReportScreen />
         ) : activeSection === 'Users' || activeSection === 'UserManagement' ? (
           <WebUserManagementScreen />
+        ) : activeSection === 'Settings' ? (
+          <WebSettingsScreen />
         ) : (
           <div className="crm-content">
             <div className="card-box" style={{ padding: '40px', textAlign: 'center' }}>

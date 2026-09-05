@@ -24,6 +24,12 @@ struct IOSAgingCustomerItem: Identifiable {
 }
 
 struct IOSAgingReportContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
+
     @State private var searchQuery = ""
     @State private var toastMsg: String? = nil
 
@@ -108,13 +114,13 @@ struct IOSAgingReportContentView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 14) {
                 // TOTAL OUTSTANDING CARD
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("TOTAL OUTSTANDING")
+                        Text("TOTAL BAKI")
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(.gray)
@@ -129,7 +135,7 @@ struct IOSAgingReportContentView: View {
                     Spacer()
                 }
                 .padding(14)
-                .background(Color.white)
+                .background(cardBg)
                 .cornerRadius(14)
                 .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 .padding(.horizontal, 16)
@@ -149,7 +155,7 @@ struct IOSAgingReportContentView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(10)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -164,7 +170,7 @@ struct IOSAgingReportContentView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(10)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -179,7 +185,7 @@ struct IOSAgingReportContentView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(10)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -194,7 +200,7 @@ struct IOSAgingReportContentView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(10)
                 }
                 .padding(.horizontal, 16)
@@ -203,7 +209,7 @@ struct IOSAgingReportContentView: View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
-                    TextField("Search customer name, UID, mobile or CIBIL...", text: $searchQuery)
+                    TextField("Search customer, mobile or status...", text: $searchQuery)
                     if !searchQuery.isEmpty {
                         Button(action: { searchQuery = "" }) {
                             Image(systemName: "xmark.circle.fill")
@@ -212,7 +218,7 @@ struct IOSAgingReportContentView: View {
                     }
                 }
                 .padding(10)
-                .background(Color.white)
+                .background(cardBg)
                 .cornerRadius(12)
                 .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 .padding(.horizontal, 16)
@@ -234,6 +240,10 @@ struct IOSAgingReportContentView: View {
 
 struct IOSAgingCustomerCard: View {
     let customer: IOSAgingCustomerItem
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -242,7 +252,7 @@ struct IOSAgingCustomerCard: View {
                     Text(customer.customerName)
                         .font(.headline)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                        .foregroundColor(textPrimary)
                     Text("UID: #\(customer.id) | Mobile: \(customer.mobile)")
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -293,7 +303,7 @@ struct IOSAgingCustomerCard: View {
             }
         }
         .padding(14)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
     }

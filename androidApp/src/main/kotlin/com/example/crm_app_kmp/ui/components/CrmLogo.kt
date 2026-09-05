@@ -33,7 +33,7 @@ fun CrmLogo(
     ) {
         Text(
             text = "CRM",
-            color = TextPrimary,
+            color = com.example.crm_app_kmp.ui.theme.DeepNavy,
             fontSize = fontSize.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 1.sp

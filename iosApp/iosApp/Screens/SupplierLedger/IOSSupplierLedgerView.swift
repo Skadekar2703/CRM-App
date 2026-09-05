@@ -147,7 +147,7 @@ struct IOSSupplierLedgerContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 14) {
                 // SUMMARY CARDS ROW
@@ -164,7 +164,7 @@ struct IOSSupplierLedgerContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
@@ -180,7 +180,7 @@ struct IOSSupplierLedgerContentView: View {
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 }

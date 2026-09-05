@@ -93,16 +93,14 @@ export const executeCrmReadTool = async (toolName: string, params: any = {}): Pr
         const c = data[0];
         const rawBaki = Number(c.baki || 0);
         const rawJama = Number(c.jama || 0);
-        const bakiVal = rawBaki >= 0 ? rawBaki : 0;
-        const jamaVal = rawBaki < 0 ? Math.abs(rawBaki) : rawJama;
-        const outstandingVal = bakiVal - jamaVal;
+        const currentBaki = Math.max(0, rawBaki - rawJama);
 
         return {
           found: true,
           name: c.name,
-          baki: formatIndianCurrency(bakiVal),
-          jama: formatIndianCurrency(jamaVal),
-          outstanding: formatIndianCurrency(outstandingVal)
+          currentBaki: formatIndianCurrency(currentBaki),
+          totalBakiGiven: formatIndianCurrency(rawBaki),
+          jama: formatIndianCurrency(rawJama)
         };
       }
 
@@ -233,9 +231,9 @@ export const queryCrmAiAssistant = async (
       if (custData.found && !custData.multiple) {
         return {
           reply: `Customer Financial Details for ${custData.name}:\n` +
-            `• Total Baki (Debt): ${custData.baki}\n` +
-            `• Total Jama (Paid): ${custData.jama}\n` +
-            `• Net Outstanding Debt: ${custData.outstanding}`,
+            `• Current Baki (Loan Owed): ${custData.currentBaki}\n` +
+            `• Total Baki Given: ${custData.totalBakiGiven}\n` +
+            `• Total Jama (Paid): ${custData.jama}`,
           toolUsed: 'get_customer_balance',
           suggestedQuestions: ["Give me my CRM summary", "Daag mein kitne items hain?", "How much did I sell this month?"],
           isConfigured: true
@@ -297,7 +295,6 @@ export const queryCrmAiAssistant = async (
       `• Active Customers: ${summary.activeCustomers}\n` +
       `• Total Baki: ${summary.totalBaki}\n` +
       `• Total Jama: ${summary.totalJama}\n` +
-      `• Total Outstanding: ${summary.totalOutstanding}\n` +
       `• Pending Daag Items: ${summary.pendingDaagItems}`,
     toolUsed: 'get_dashboard_summary',
     suggestedQuestions: [

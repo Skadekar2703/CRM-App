@@ -18,6 +18,56 @@ data class ChequeModel(
 )
 
 @JsExport
+object ChequeDateUtils {
+    private val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+    fun formatToDisplayDate(rawDate: String): String {
+        if (rawDate.isBlank()) return ""
+        val clean = rawDate.trim().split("T")[0]
+        val parts = clean.split("-")
+        if (parts.size == 3 && parts[0].length == 4) {
+            val year = parts[0]
+            val monthIdx = parts[1].toIntOrNull()?.minus(1) ?: 0
+            val day = parts[2].padStart(2, '0')
+            if (monthIdx in 0..11) {
+                return "$day ${months[monthIdx]} $year"
+            }
+        }
+        return rawDate
+    }
+
+    fun parseDisplayToIso(displayDate: String): String {
+        if (displayDate.isBlank()) return ""
+        val clean = displayDate.trim()
+        if (clean.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))) {
+            return clean
+        }
+        val parts = clean.split(" ", "-")
+        if (parts.size == 3) {
+            val day = parts[0].padStart(2, '0')
+            val monthStr = parts[1]
+            val year = parts[2]
+            val monthIdx = months.indexOfFirst { it.equals(monthStr, ignoreCase = true) }
+            if (monthIdx >= 0) {
+                val monthNum = (monthIdx + 1).toString().padStart(2, '0')
+                return "$year-$monthNum-$day"
+            }
+        }
+        return displayDate
+    }
+
+    fun isDueDateValid(issueDateIsoOrDisplay: String, dueDateIsoOrDisplay: String): Boolean {
+        val issueIso = parseDisplayToIso(issueDateIsoOrDisplay)
+        val dueIso = parseDisplayToIso(dueDateIsoOrDisplay)
+        if (issueIso.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$")) && dueIso.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))) {
+            return dueIso >= issueIso
+        }
+        return true
+    }
+}
+
+
+@JsExport
 object ChequeRepository {
     private val initialCheques = mutableListOf<ChequeModel>()
 

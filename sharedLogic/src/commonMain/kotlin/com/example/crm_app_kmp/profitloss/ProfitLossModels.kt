@@ -1,6 +1,7 @@
 package com.example.crm_app_kmp.profitloss
 
 import kotlin.js.JsExport
+import kotlin.math.max
 
 @JsExport
 data class PLStatementItem(
@@ -34,46 +35,73 @@ data class ProfitLossReport(
 )
 
 @JsExport
-object ProfitLossRepository {
-    fun calculateReport(fromDate: String = "01/08/2026", toDate: String = "31/08/2026"): ProfitLossReport {
-        // Base financial dataset for the report period
-        val revenue = 185000.0
-        val purchases = 77000.0
-        val expenses = 16050.0
-        val salaries = 25000.0
-        val expPlusSalaries = expenses + salaries
-
-        // Net Profit = Revenue - Purchases - Expenses - Salaries
+object ProfitLossCalculator {
+    fun calculate(
+        fromDate: String,
+        toDate: String,
+        revenue: Double,
+        purchases: Double,
+        expenses: Double,
+        salaries: Double
+    ): ProfitLossReport {
+        val totalExpensesAndSalaries = expenses + salaries
         val netProfit = revenue - purchases - expenses - salaries
         val isLoss = netProfit < 0
 
         val statementItems = listOf(
             PLStatementItem(label = "+ Revenue (Sales)", amount = revenue, type = "INCOME"),
             PLStatementItem(label = "− Purchases", amount = purchases, type = "COST"),
-            PLStatementItem(label = "− Expenses", amount = expenses, type = "COST"),
-            PLStatementItem(label = "− Salaries (paid)", amount = salaries, type = "COST"),
-            PLStatementItem(label = "= Net Profit", amount = netProfit, type = "NET", isHighlight = true)
+            PLStatementItem(label = "− Operating Expenses", amount = expenses, type = "COST"),
+            PLStatementItem(label = "− Employee / Labour Costs", amount = salaries, type = "COST"),
+            PLStatementItem(
+                label = if (isLoss) "= Net Loss" else "= Net Profit",
+                amount = netProfit,
+                type = "NET",
+                isHighlight = true
+            )
         )
 
         val breakdown = CostProfitBreakdownData(
             purchases = purchases,
             expenses = expenses,
             salaries = salaries,
-            netProfit = maxOf(0.0, netProfit)
+            netProfit = max(0.0, netProfit)
         )
 
         return ProfitLossReport(
-            fromDate = fromDate.ifBlank { "01/08/2026" },
-            toDate = toDate.ifBlank { "31/08/2026" },
+            fromDate = fromDate,
+            toDate = toDate,
             revenue = revenue,
             purchases = purchases,
             expenses = expenses,
             salaries = salaries,
-            expensesPlusSalaries = expPlusSalaries,
+            expensesPlusSalaries = totalExpensesAndSalaries,
             netProfit = netProfit,
             isLoss = isLoss,
             statementItems = statementItems,
             breakdown = breakdown
         )
     }
+
+    fun formatINR(amount: Double): String {
+        val absVal = kotlin.math.abs(amount)
+        val intPart = absVal.toLong()
+        val decPart = ((absVal - intPart) * 100).toLong()
+
+        val strInt = intPart.toString()
+        val formattedInt = if (strInt.length > 3) {
+            val lastThree = strInt.substring(strInt.length - 3)
+            val otherNumbers = strInt.substring(0, strInt.length - 3)
+            val regex = "(\\d+?)(?=(\\d{2})+(?!\\d))".toRegex()
+            val formattedOthers = regex.replace(otherNumbers) { "${it.value}," }
+            "$formattedOthers,$lastThree"
+        } else {
+            strInt
+        }
+
+        val formattedDec = if (decPart < 10) "0$decPart" else decPart.toString()
+        val prefix = if (amount < 0) "-₹" else "₹"
+        return "$prefix$formattedInt.$formattedDec"
+    }
 }
+

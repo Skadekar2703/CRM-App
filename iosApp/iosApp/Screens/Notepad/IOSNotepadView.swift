@@ -23,40 +23,7 @@ struct IOSNoteItem: Identifiable {
 }
 
 struct IOSNotepadContentView: View {
-    @State private var notes: [IOSNoteItem] = [
-        IOSNoteItem(
-            id: "NOTE-101",
-            title: "Urgent: Payment Clearance Needed",
-            content: "Contact Ramesh Textiles regarding overdue payment of ₹1,80,000 before Friday.",
-            isUrgent: true,
-            isPinned: true,
-            createdAt: "Aug 28, 2026"
-        ),
-        IOSNoteItem(
-            id: "NOTE-102",
-            title: "Stock Inspection - Basmati Rice",
-            content: "Check batch #TRX-98234 for moisture and packaging quality at main warehouse.",
-            isUrgent: false,
-            isPinned: true,
-            createdAt: "Aug 26, 2026"
-        ),
-        IOSNoteItem(
-            id: "NOTE-103",
-            title: "Weekly Sales Review Agenda",
-            content: "Discuss Madurai area sales targets, new customer onboarding & discount limits.",
-            isUrgent: false,
-            isPinned: false,
-            createdAt: "Aug 24, 2026"
-        ),
-        IOSNoteItem(
-            id: "NOTE-104",
-            title: "Transport Vendor Agreement",
-            content: "Review freight rates with VRL Logistics for bulk delivery in North Zone.",
-            isUrgent: true,
-            isPinned: false,
-            createdAt: "Aug 20, 2026"
-        )
-    ]
+    @State private var notes: [IOSNoteItem] = []
 
     @State private var searchQuery = ""
     @State private var showFormSheet = false
@@ -64,6 +31,65 @@ struct IOSNotepadContentView: View {
     @State private var deletingNote: IOSNoteItem? = nil
     @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
+    @State private var isLoading = true
+    @State private var errorMessage: String? = nil
+
+    @AppStorage("crm_is_dark_mode") private var isDarkMode = false
+
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color.white
+    }
+
+    private var pageBg: Color {
+        isDarkMode ? Color(red: 11/255, green: 15/255, blue: 25/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
+    }
+
+    private var textPrimary: Color {
+        isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+
+    func fetchNotesFromSupabase() {
+        isLoading = true
+        errorMessage = nil
+        SupabaseIOSClient.shared.fetchTable(table: "notes") { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let items):
+                    var nList: [IOSNoteItem] = []
+                    for item in items {
+                        let id = "\(item["id"] ?? UUID().uuidString)"
+                        let title = item["title"] as? String ?? "Untitled Note"
+                        let content = item["content"] as? String ?? ""
+                        let priority = item["priority"] as? String ?? "Normal"
+                        let isUrgent = priority == "High" || (item["is_urgent"] as? Bool ?? false)
+                        let isPinned = item["is_pinned"] as? Bool ?? false
+                        let createdAt = item["created_at"] as? String ?? "Recent"
+
+                        nList.append(
+                            IOSNoteItem(
+                                id: id,
+                                title: title,
+                                content: content,
+                                isUrgent: isUrgent,
+                                isPinned: isPinned,
+                                createdAt: createdAt
+                            )
+                        )
+                    }
+                    self.notes = nList
+                    self.isLoading = false
+                case .failure(let err):
+                    self.errorMessage = err.localizedDescription
+                    self.notes = []
+                    self.isLoading = false
+                }
+            }
+        }
+    }
 
     var filteredNotes: [IOSNoteItem] {
         let q = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,121 +109,164 @@ struct IOSNotepadContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            pageBg.ignoresSafeArea()
 
             VStack(spacing: 14) {
                 // SEARCH BAR
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
+                        .foregroundColor(textMuted)
                     TextField("Search notes...", text: $searchQuery)
+                        .foregroundColor(textPrimary)
                     if !searchQuery.isEmpty {
                         Button(action: { searchQuery = "" }) {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
+                                .foregroundColor(textMuted)
                         }
                     }
                 }
-                .padding(10)
-                .background(Color.white)
+                .padding(12)
+                .background(cardBg)
                 .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .shadow(color: Color.black.opacity(0.03), radius: 2)
 
+                // TOAST MESSAGE
                 if let msg = toastMsg {
-                    Text("✓ \(msg)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.green)
-                        .padding(10)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(red: 240/255, green: 253/255, blue: 244/255))
-                        .cornerRadius(8)
-                        .padding(.horizontal, 16)
+                    let isError = msg.contains("Unable") || msg.contains("Failed")
+                    HStack {
+                        Text(isError ? "⚠️ \(msg)" : "✓ \(msg)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(isError ? .red : .green)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(isError ? Color.red.opacity(0.1) : Color.green.opacity(0.1))
+                    .cornerRadius(10)
                 }
 
-                // NOTES LIST
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        // PINNED NOTES SECTION
-                        if !pinnedNotes.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("📌 PINNED NOTES (\(pinnedNotes.count))")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.blue)
+                // ERROR STATE
+                if let err = errorMessage {
+                    VStack(spacing: 8) {
+                        Text("⚠️ \(err)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                        Button(action: fetchNotesFromSupabase) {
+                            Text("Retry Loading Notes")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
+                    .background(cardBg)
+                    .cornerRadius(12)
+                }
 
-                                ForEach(pinnedNotes) { note in
-                                    IOSNoteCard(
-                                        note: note,
-                                        onEdit: {
-                                            editingNote = note
-                                            showFormSheet = true
-                                        },
-                                        onDelete: {
-                                            deletingNote = note
-                                            showDeleteAlert = true
-                                        },
-                                        onTogglePin: {
-                                            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-                                                notes[idx].isPinned.toggle()
-                                                toastMsg = notes[idx].isPinned ? "Note pinned" : "Note unpinned"
+                // NOTES LIST / LOADING / EMPTY STATE
+                if isLoading {
+                    VStack {
+                        ProgressView()
+                        Text("Loading notes...")
+                            .font(.caption)
+                            .foregroundColor(textMuted)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredNotes.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 40))
+                            .foregroundColor(textMuted)
+                        Text("No notes available")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(textPrimary)
+                        Text(searchQuery.isEmpty ? "Create your first note to get started!" : "No notes matching '\(searchQuery)'")
+                            .font(.caption)
+                            .foregroundColor(textMuted)
+
+                        Button(action: {
+                            editingNote = nil
+                            showFormSheet = true
+                        }) {
+                            Text("+ Add Note")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
+                        .padding(.top, 8)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(40)
+                    .background(cardBg)
+                    .cornerRadius(16)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            // PINNED SECTION
+                            if !pinnedNotes.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("📌 PINNED NOTES (\(pinnedNotes.count))")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.blue)
+
+                                    ForEach(pinnedNotes) { note in
+                                        IOSNoteCardRow(
+                                            note: note,
+                                            onEdit: {
+                                                editingNote = note
+                                                showFormSheet = true
+                                            },
+                                            onDelete: {
+                                                deletingNote = note
+                                                showDeleteAlert = true
                                             }
-                                        },
-                                        onToggleUrgent: {
-                                            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-                                                notes[idx].isUrgent.toggle()
-                                                toastMsg = notes[idx].isUrgent ? "Marked Urgent" : "Marked Normal"
-                                            }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        // OTHER NOTES SECTION
-                        if !otherNotes.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(pinnedNotes.isEmpty ? "ALL NOTES (\(otherNotes.count))" : "OTHER NOTES (\(otherNotes.count))")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.gray)
+                            // OTHER NOTES SECTION
+                            if !otherNotes.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(!pinnedNotes.isEmpty ? "OTHER NOTES (\(otherNotes.count))" : "ALL NOTES (\(otherNotes.count))")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(textMuted)
 
-                                ForEach(otherNotes) { note in
-                                    IOSNoteCard(
-                                        note: note,
-                                        onEdit: {
-                                            editingNote = note
-                                            showFormSheet = true
-                                        },
-                                        onDelete: {
-                                            deletingNote = note
-                                            showDeleteAlert = true
-                                        },
-                                        onTogglePin: {
-                                            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-                                                notes[idx].isPinned.toggle()
-                                                toastMsg = notes[idx].isPinned ? "Note pinned" : "Note unpinned"
+                                    ForEach(otherNotes) { note in
+                                        IOSNoteCardRow(
+                                            note: note,
+                                            onEdit: {
+                                                editingNote = note
+                                                showFormSheet = true
+                                            },
+                                            onDelete: {
+                                                deletingNote = note
+                                                showDeleteAlert = true
                                             }
-                                        },
-                                        onToggleUrgent: {
-                                            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-                                                notes[idx].isUrgent.toggle()
-                                                toastMsg = notes[idx].isUrgent ? "Marked Urgent" : "Marked Normal"
-                                            }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 80)
                 }
             }
+            .padding(16)
 
-            // FAB ADD BUTTON
+            // FLOATING ACTION BUTTON (+ ADD NOTE)
             Button(action: {
                 editingNote = nil
                 showFormSheet = true
@@ -209,191 +278,184 @@ struct IOSNotepadContentView: View {
                     .frame(width: 56, height: 56)
                     .background(Color.blue)
                     .clipShape(Circle())
-                    .shadow(radius: 4)
+                    .shadow(color: Color.blue.opacity(0.3), radius: 6, x: 0, y: 3)
             }
             .padding(20)
         }
+        .onAppear {
+            fetchNotesFromSupabase()
+        }
         .sheet(isPresented: $showFormSheet) {
             IOSNoteFormSheet(
-                note: editingNote,
+                editingNote: editingNote,
                 onSave: { title, content, isUrgent, isPinned in
-                    if let target = editingNote, let idx = notes.firstIndex(where: { $0.id == target.id }) {
-                        notes[idx].title = title
-                        notes[idx].content = content
-                        notes[idx].isUrgent = isUrgent
-                        notes[idx].isPinned = isPinned
-                        toastMsg = "Note '\(title)' updated"
+                    let record: [String: Any] = [
+                        "title": title.trimmingCharacters(in: .whitespacesAndNewlines),
+                        "content": content.trimmingCharacters(in: .whitespacesAndNewlines),
+                        "priority": isUrgent ? "High" : "Normal",
+                        "is_pinned": isPinned
+                    ]
+
+                    if let noteToEdit = editingNote {
+                        SupabaseIOSClient.shared.updateRecord(table: "notes", id: noteToEdit.id, record: record) { result in
+                            DispatchQueue.main.async {
+                                showFormSheet = false
+                                if case .success = result {
+                                    toastMsg = "Note updated successfully"
+                                    fetchNotesFromSupabase()
+                                } else {
+                                    toastMsg = "Unable to save note. Please try again."
+                                }
+                            }
+                        }
                     } else {
-                        let newN = IOSNoteItem(
-                            id: "NOTE-\(100 + notes.count + 1)",
-                            title: title,
-                            content: content,
-                            isUrgent: isUrgent,
-                            isPinned: isPinned,
-                            createdAt: "Just now"
-                        )
-                        notes.insert(newN, at: 0)
-                        toastMsg = "Note '\(title)' created"
+                        SupabaseIOSClient.shared.insertRecord(table: "notes", record: record) { result in
+                            DispatchQueue.main.async {
+                                showFormSheet = false
+                                if case .success = result {
+                                    toastMsg = "Note saved successfully"
+                                    fetchNotesFromSupabase()
+                                } else {
+                                    toastMsg = "Unable to save note. Please try again."
+                                }
+                            }
+                        }
                     }
-                    showFormSheet = false
                 }
             )
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Note"),
-                message: Text("Are you sure you want to delete note '\(deletingNote?.title ?? "")'?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deletingNote {
-                        notes.removeAll { $0.id == target.id }
-                        toastMsg = "Note '\(target.title)' deleted"
+        .alert("Delete Note", isPresented: $showDeleteAlert, presenting: deletingNote) { target in
+            Button("Delete", role: .destructive) {
+                SupabaseIOSClient.shared.deleteRecord(table: "notes", id: target.id) { result in
+                    DispatchQueue.main.async {
+                        if case .success = result {
+                            toastMsg = "Note deleted"
+                            fetchNotesFromSupabase()
+                        } else {
+                            toastMsg = "Unable to delete note. Please try again."
+                        }
                     }
-                },
-                secondaryButton: .cancel()
-            )
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { target in
+            Text("Are you sure you want to delete '\(target.title)'? This action cannot be undone.")
         }
     }
 }
 
-struct IOSNoteCard: View {
+struct IOSNoteCardRow: View {
     let note: IOSNoteItem
     var onEdit: () -> Void
     var onDelete: () -> Void
-    var onTogglePin: () -> Void
-    var onToggleUrgent: () -> Void
+
+    @AppStorage("crm_is_dark_mode") private var isDarkMode = false
+
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color.white
+    }
+    private var textPrimary: Color {
+        isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // TITLE & PIN BUTTON
-            HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
                 Text(note.title)
-                    .font(.headline)
+                    .font(.subheadline)
                     .fontWeight(.bold)
-                    .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                    .fixedSize(horizontal: false, vertical: true)
-
+                    .foregroundColor(textPrimary)
                 Spacer()
-
-                Button(action: onTogglePin) {
-                    Image(systemName: note.isPinned ? "pin.fill" : "pin")
-                        .foregroundColor(note.isPinned ? .blue : .gray.opacity(0.5))
+                if note.isPinned {
+                    Text("📌")
+                        .font(.caption)
+                }
+                if note.isUrgent {
+                    Text("🔴")
+                        .font(.caption)
                 }
             }
 
-            // URGENT BADGE
-            if note.isUrgent {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                    Text("URGENT")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.red.opacity(0.12))
-                .foregroundColor(.red)
-                .cornerRadius(6)
+            if !note.content.isEmpty {
+                Text(note.content)
+                    .font(.caption)
+                    .foregroundColor(textMuted)
+                    .lineLimit(3)
             }
-
-            // CONTENT
-            Text(note.content)
-                .font(.subheadline)
-                .foregroundColor(Color(red: 71/255, green: 85/255, blue: 105/255))
-                .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
-            // FOOTER & ACTIONS
             HStack {
                 Text(note.createdAt)
                     .font(.caption2)
-                    .foregroundColor(.gray)
-
+                    .foregroundColor(textMuted)
                 Spacer()
-
-                HStack(spacing: 8) {
-                    Button(action: onToggleUrgent) {
-                        Text(note.isUrgent ? "Urgent" : "Make Urgent")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(note.isUrgent ? Color.red.opacity(0.15) : Color(red: 241/255, green: 245/255, blue: 249/255))
-                            .foregroundColor(note.isUrgent ? .red : .gray)
-                            .cornerRadius(6)
-                    }
-
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .font(.caption)
-                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                            .padding(6)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                            .cornerRadius(6)
-                    }
-
-                    Button(action: onDelete) {
-                        Image(systemName: "trash.fill")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(6)
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(6)
-                    }
+                Button(action: onEdit) {
+                    Text("Edit")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
                 }
+                Button(action: onDelete) {
+                    Text("Delete")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                }
+                .padding(.leading, 8)
             }
         }
-        .padding(16)
-        .background(Color.white)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(note.isUrgent ? Color.red.opacity(0.4) : Color.clear, lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
+        .padding(14)
+        .background(cardBg)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.03), radius: 2)
     }
 }
 
 struct IOSNoteFormSheet: View {
-    var note: IOSNoteItem?
+    let editingNote: IOSNoteItem?
     var onSave: (String, String, Bool, Bool) -> Void
 
-    @Environment(\.presentationMode) var presentationMode
-    @State private var title = ""
-    @State private var content = ""
-    @State private var isUrgent = false
-    @State private var isPinned = false
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title: String = ""
+    @State private var content: String = ""
+    @State private var isUrgent: Bool = false
+    @State private var isPinned: Bool = false
 
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Note Details")) {
-                    TextField("Note Title *", text: $title)
+                    TextField("Title", text: $title)
                     TextEditor(text: $content)
-                        .frame(minHeight: 120)
+                        .frame(height: 100)
                 }
 
                 Section(header: Text("Options")) {
-                    Toggle("Mark as Urgent", isOn: $isUrgent)
-                        .toggleStyle(SwitchToggleStyle(tint: .red))
+                    Toggle("Mark as High Priority / Urgent", isOn: $isUrgent)
                     Toggle("Pin to Top", isOn: $isPinned)
-                        .toggleStyle(SwitchToggleStyle(tint: .blue))
                 }
             }
-            .navigationTitle(note == nil ? "Add Note" : "Edit Note")
+            .navigationTitle(editingNote != null ? "Edit Note" : "New Note")
             .navigationBarItems(
-                leading: Button("Cancel") { presentationMode.wrappedValue.dismiss() },
+                leading: Button("Cancel") { dismiss() },
                 trailing: Button("Save") {
-                    onSave(title, content, isUrgent, isPinned)
-                }.disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || content.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        onSave(title, content, isUrgent, isPinned)
+                    }
+                }
+                .fontWeight(.bold)
             )
             .onAppear {
-                if let n = note {
-                    title = n.title
-                    content = n.content
-                    isUrgent = n.isUrgent
-                    isPinned = n.isPinned
+                if let note = editingNote {
+                    title = note.title
+                    content = note.content
+                    isUrgent = note.isUrgent
+                    isPinned = note.isPinned
                 }
             }
         }

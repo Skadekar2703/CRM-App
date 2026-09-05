@@ -5,33 +5,30 @@ import kotlin.js.JsExport
 @JsExport
 data class CrmMenuItem(
     val id: String,
-    val label: String
+    val label: String,
+    val adminOnly: Boolean = false,
+    val isAction: Boolean = false
 )
 
 @JsExport
 object CrmNavigationMenu {
     val items: List<CrmMenuItem> = listOf(
         CrmMenuItem("Dashboard", "Dashboard"),
-        CrmMenuItem("Sales", "Sales"),
-        CrmMenuItem("Areas", "Areas"),
-        CrmMenuItem("Categories", "Categories"),
-        CrmMenuItem("Items", "Items"),
-        CrmMenuItem("Transports", "Transports"),
-        CrmMenuItem("Udhaari", "Udhaari"),
-        CrmMenuItem("Cheques", "Cheques"),
         CrmMenuItem("Customers", "Customers"),
-        CrmMenuItem("Suppliers", "Suppliers"),
-        CrmMenuItem("Employees", "Employees"),
-        CrmMenuItem("Daag", "Daag"),
+        CrmMenuItem("Categories", "Categories"),
+        CrmMenuItem("Udhaari", "Udhaari"),
+        CrmMenuItem("Profit & Loss", "Profit & Loss"),
+        CrmMenuItem("Cheques", "Cheques"),
+        CrmMenuItem("Cash Book", "Cash Book"),
+        CrmMenuItem("Expenses", "Expenses"),
+        CrmMenuItem("Areas", "Areas"),
         CrmMenuItem("Notepad", "Notepad"),
         CrmMenuItem("Reminders", "Reminders"),
-        CrmMenuItem("Expenses", "Expenses"),
-        CrmMenuItem("Supplier Ledger", "Supplier Ledger"),
-        CrmMenuItem("Cash Book", "Cash Book"),
-        CrmMenuItem("Profit & Loss", "Profit & Loss"),
-        CrmMenuItem("Aging Report", "Aging Report"),
-        CrmMenuItem("Users", "Users"),
+        CrmMenuItem("Daag", "Daag"),
+        CrmMenuItem("Employees", "Employees"),
+        CrmMenuItem("Users", "Users", adminOnly = true),
         CrmMenuItem("Settings", "Settings"),
-        CrmMenuItem("Sign Out", "Logout")
+        CrmMenuItem("Dark Theme", "Dark Theme", isAction = true),
+        CrmMenuItem("Logout", "Logout", isAction = true)
     )
 }

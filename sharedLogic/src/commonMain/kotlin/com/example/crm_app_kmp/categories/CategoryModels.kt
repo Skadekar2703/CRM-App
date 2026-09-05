@@ -6,10 +6,10 @@ import kotlin.js.JsExport
 data class CategoryModel(
     val id: String,
     val name: String,
-    val type: String, // "Item Category" or "Customer Category"
-    val status: String, // "Active" or "Inactive"
-    val createdDate: String,
-    val usageCount: Int,
+    val type: String = "Customer Category", // Defaults to Customer Category
+    val status: String = "Active", // "Active" or "Inactive"
+    val createdDate: String = "Recent",
+    val usageCount: Int = 0,
     val subText: String? = null
 )
 
@@ -29,16 +29,8 @@ object CategoryRepository {
             val matchesQuery = q.isEmpty() ||
                     cat.id.lowercase().contains(q) ||
                     cat.name.lowercase().contains(q) ||
-                    cat.type.lowercase().contains(q) ||
                     cat.status.lowercase().contains(q) ||
                     (cat.subText != null && cat.subText.lowercase().contains(q))
-
-            val matchesType = when (typeFilter.lowercase()) {
-                "all", "all types" -> true
-                "items", "item", "item category" -> cat.type.equals("Item Category", ignoreCase = true)
-                "customers", "customer", "customer category", "customer type" -> cat.type.equals("Customer Category", ignoreCase = true)
-                else -> cat.type.equals(typeFilter, ignoreCase = true)
-            }
 
             val matchesStatus = when (statusFilter.lowercase()) {
                 "all" -> true
@@ -47,25 +39,24 @@ object CategoryRepository {
                 else -> cat.status.equals(statusFilter, ignoreCase = true)
             }
 
-            matchesQuery && matchesType && matchesStatus
+            matchesQuery && matchesStatus
         }
     }
 
     fun addCategory(
         name: String,
-        type: String,
-        status: String,
+        type: String = "Customer Category",
+        status: String = "Active",
         subText: String? = null
     ): CategoryModel {
         val nextNum = initialCategories.size + 1
         val formattedId = "#CAT-" + nextNum.toString().padStart(3, '0')
-        val formattedType = if (type.lowercase().contains("item")) "Item Category" else "Customer Category"
         val formattedStatus = if (status.lowercase().contains("inactive") || status.lowercase().contains("archived")) "Inactive" else "Active"
 
         val newCategory = CategoryModel(
             id = formattedId,
             name = name,
-            type = formattedType,
+            type = "Customer Category",
             status = formattedStatus,
             createdDate = "Just now",
             usageCount = 0,

@@ -5,6 +5,7 @@ import { UdhaariTransactionModal } from './UdhaariTransactionModal';
 import { UdhaariHistoryModal } from './UdhaariHistoryModal';
 import { DeleteUdhaariDialog } from './DeleteUdhaariDialog';
 import { supabase } from '../../lib/supabase';
+import { getSignedPhotoUrl } from '../../utils/photoUtils';
 import './Udhaari.css';
 
 export const formatIndianCurrency = (amount: number): string => {
@@ -15,6 +16,51 @@ export const formatIndianCurrency = (amount: number): string => {
     maximumFractionDigits: 2
   });
   return `${isNegative ? '-' : ''}₹${formatted}`;
+};
+
+const UdhaariCustomerAvatar: React.FC<{ photoUrl?: string | null; name: string; cibilStatus?: string }> = ({ photoUrl, name, cibilStatus }) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (photoUrl) {
+      getSignedPhotoUrl(photoUrl).then((url) => {
+        if (isMounted) setSignedUrl(url);
+      });
+    } else {
+      setSignedUrl(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [photoUrl]);
+
+  if (signedUrl) {
+    return (
+      <img
+        src={signedUrl}
+        alt={name}
+        onError={() => setSignedUrl(null)}
+        style={{
+          width: '42px',
+          height: '42px',
+          borderRadius: '50%',
+          objectFit: 'cover',
+          border: '1.5px solid #2563eb',
+          flexShrink: 0
+        }}
+      />
+    );
+  }
+
+  const initial = name ? name.charAt(0).toUpperCase() : 'C';
+  const avatarClass = cibilStatus === 'Good' ? 'green' : 'blue-light';
+
+  return (
+    <div className={`customer-initial-avatar ${avatarClass}`} style={{ flexShrink: 0, width: '42px', height: '42px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+      {initial}
+    </div>
+  );
 };
 
 export const WebUdhaariScreen: React.FC = () => {
@@ -68,9 +114,7 @@ export const WebUdhaariScreen: React.FC = () => {
           data.map((c: any) => {
             const rawBaki = Number(c.baki || 0);
             const rawJama = Number(c.jama || 0);
-            const bakiVal = rawBaki >= 0 ? rawBaki : 0;
-            const jamaVal = rawBaki < 0 ? Math.abs(rawBaki) : rawJama;
-            const outstandingVal = bakiVal - jamaVal;
+            const currentBaki = rawBaki - rawJama;
             return {
               uid: String(c.id),
               name: c.name || 'Unknown',
@@ -78,14 +122,16 @@ export const WebUdhaariScreen: React.FC = () => {
               area: c.area || 'Local Market',
               category: c.category || 'General',
               cibilStatus: c.cibil_status || 'Good',
-              baki: bakiVal,
-              jama: jamaVal,
-              outstanding: outstandingVal,
-              balance: outstandingVal,
-              balanceType: outstandingVal >= 0 ? 'Baki' : 'Jama',
+              baki: currentBaki,
+              jama: rawJama,
+              outstanding: currentBaki,
+              balance: currentBaki,
+              balanceType: currentBaki >= 0 ? 'Baki' : 'Jama',
               creditLimit: Number(c.credit_limit || 100000),
+              creditBlocked: Boolean(c.credit_blocked),
               lastTxnDate: 'Recent',
-              status: c.status || 'Active'
+              status: c.status || 'Active',
+              photoUrl: c.photo_url || null
             };
           })
         );
@@ -116,10 +162,6 @@ export const WebUdhaariScreen: React.FC = () => {
       .filter((c) => c.status === 'Active')
       .reduce((sum, c) => sum + (c.jama || 0), 0);
   }, [customers]);
-
-  const totalOutstanding = useMemo(() => {
-    return totalBaki - totalJama;
-  }, [totalBaki, totalJama]);
 
   const activeCustomerCount = useMemo(() => {
     return customers.filter((c) => c.status === 'Active').length;
@@ -265,61 +307,46 @@ export const WebUdhaariScreen: React.FC = () => {
     const targetCust = customers.find((c) => c.uid === customerUid);
     if (!targetCust) return;
 
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
-
     try {
-      const txnPayload: any = {
-        customer_id: customerUid,
-        customer_name: targetCust.name,
-        type: type,
-        amount: amount,
-        notes: notes,
-        status: 'Completed'
-      };
-      if (userId) txnPayload.user_id = userId;
-
-      const { error: txnError } = await supabase.from('udhaari').insert([txnPayload]);
-      if (txnError) {
-        console.error('Supabase transaction insert error:', txnError);
-      }
-
-      let newBaki = targetCust.baki;
-      let newJama = targetCust.jama;
+      // 1. Client-side UX Validation
       if (type === 'Baki') {
-        newBaki += amount;
-      } else {
-        newBaki = Math.max(0, targetCust.baki - amount);
-        newJama += amount;
+        if (targetCust.creditBlocked) {
+          showToast('⚠️ Credit is blocked for this customer.');
+          return;
+        }
+        if (targetCust.baki + amount > targetCust.creditLimit) {
+          showToast("⚠️ Udhar exceeds the customer's credit limit.");
+          return;
+        }
       }
 
-      let { error: custError } = await supabase
-        .from('customers')
-        .update({ baki: newBaki, jama: newJama })
-        .eq('id', customerUid);
+      // 2. Authoritative Server-Side Database RPC Call
+      const { error } = await supabase.rpc('add_udhaari_transaction', {
+        p_customer_id: customerUid,
+        p_type: type,
+        p_amount: amount,
+        p_notes: notes
+      });
 
-      if (custError && custError.message.includes('jama')) {
-        // Fallback if 'jama' column is missing in Supabase schema cache
-        const netBalance = type === 'Baki' ? targetCust.baki + amount : Math.max(0, targetCust.baki - amount);
-        const { error: fallbackErr } = await supabase
-          .from('customers')
-          .update({ baki: netBalance })
-          .eq('id', customerUid);
-        custError = fallbackErr;
+      if (error) {
+        console.error('Supabase add_udhaari_transaction RPC error:', error);
+        const errMsg = error.message || String(error);
+        if (errMsg.includes("credit limit") || errMsg.includes("Udhar exceeds")) {
+          showToast("⚠️ Udhar exceeds the customer's credit limit.");
+        } else if (errMsg.includes("blocked")) {
+          showToast('⚠️ Credit is blocked for this customer.');
+        } else {
+          showToast(`⚠️ Transaction failed: ${errMsg}`);
+        }
+        return;
       }
 
-      if (custError) {
-        console.error('Supabase customer update error:', custError);
-        showToast(`Update error: ${custError.message}`);
-      } else {
-        showToast(`₹${amount.toLocaleString('en-IN')} ${type} saved for ${targetCust.name}.`);
-      }
+      showToast(`✅ ${type} entry of ₹${amount.toLocaleString()} recorded for ${targetCust.name}.`);
+      await loadDataFromSupabase();
     } catch (e: any) {
-      console.error('Supabase transaction error:', e);
-      showToast(`Error saving: ${e?.message || e}`);
+      console.error('Save transaction error:', e);
+      showToast(`⚠️ ${e?.message || 'Failed to save transaction.'}`);
     }
-
-    await loadDataFromSupabase();
   };
 
   const handleConfirmDelete = async () => {
@@ -336,16 +363,15 @@ export const WebUdhaariScreen: React.FC = () => {
 
   // EXPORT HANDLERS
   const handleExportCSV = () => {
-    const headers = ['UID', 'CUSTOMER', 'MOBILE', 'AREA', 'CIBIL', 'BAKI', 'JAMA', 'OUTSTANDING', 'LIMIT'];
+    const headers = ['UID', 'CUSTOMER', 'MOBILE', 'AREA', 'CIBIL', 'BAKI', 'JAMA', 'LIMIT'];
     const rows = filteredCustomers.map((c) => [
       c.uid,
-      `"${c.name}"`,
+      `"${c.name.replace(/"/g, '""')}"`,
       `"${c.mobile}"`,
       `"${c.area}"`,
       c.cibilStatus,
       `"${formatIndianCurrency(c.baki)}"`,
       `"${formatIndianCurrency(c.jama)}"`,
-      `"${formatIndianCurrency(c.outstanding)}"`,
       `"${formatIndianCurrency(c.creditLimit)}"`
     ]);
     const csvContent =
@@ -373,7 +399,7 @@ export const WebUdhaariScreen: React.FC = () => {
           <div>
             <h1 className="udhaari-title-text">Udhaari</h1>
             <div className="udhaari-subtitle-text">
-              Manage customer debt, payments, and outstanding balances
+              Manage customer debt, payments, and balances
             </div>
           </div>
 
@@ -408,11 +434,11 @@ export const WebUdhaariScreen: React.FC = () => {
         )}
 
         {/* SUMMARY CARDS */}
-        <div className="udhaari-summary-cards" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="udhaari-summary-cards" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           {/* CARD 1: TOTAL BAKI */}
           <div className="summary-card-udhaari red-accent">
             <div>
-              <div className="summary-card-label">TOTAL BAKI (DEBT)</div>
+              <div className="summary-card-label">TOTAL BAKI</div>
               <div className="summary-card-value red-text">
                 {formatIndianCurrency(totalBaki)}
               </div>
@@ -425,10 +451,10 @@ export const WebUdhaariScreen: React.FC = () => {
           </div>
 
           {/* CARD 2: TOTAL JAMA */}
-          <div className="summary-card-udhaari">
+          <div className="summary-card-udhaari green-accent">
             <div>
-              <div className="summary-card-label">TOTAL JAMA (CREDIT)</div>
-              <div className="summary-card-value green-text" style={{ color: '#16a34a' }}>
+              <div className="summary-card-label">TOTAL JAMA</div>
+              <div className="summary-card-value text-green">
                 {formatIndianCurrency(totalJama)}
               </div>
             </div>
@@ -439,22 +465,7 @@ export const WebUdhaariScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* CARD 3: OUTSTANDING */}
-          <div className="summary-card-udhaari blue-accent">
-            <div>
-              <div className="summary-card-label">TOTAL OUTSTANDING</div>
-              <div className="summary-card-value" style={{ color: totalOutstanding >= 0 ? '#1e293b' : '#16a34a' }}>
-                {formatIndianCurrency(totalOutstanding)}
-              </div>
-            </div>
-            <div className="summary-icon-box blue-bg">
-              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M12 7h.01M15 7h.01" />
-              </svg>
-            </div>
-          </div>
-
-          {/* CARD 4: CUSTOMERS */}
+          {/* CARD 3: CUSTOMERS */}
           <div className="summary-card-udhaari blue-accent">
             <div>
               <div className="summary-card-label">CUSTOMERS</div>
@@ -578,7 +589,6 @@ export const WebUdhaariScreen: React.FC = () => {
                   <th>CIBIL</th>
                   <th>Total Baki</th>
                   <th>Total Jama</th>
-                  <th>Outstanding</th>
                   <th>Limit</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -587,12 +597,8 @@ export const WebUdhaariScreen: React.FC = () => {
                 {paginatedData.map((customer) => (
                   <tr key={customer.uid}>
                     <td>
-                      <div className="udhaari-customer-cell">
-                        <div
-                          className={`customer-initial-avatar ${customer.cibilStatus === 'Good' ? 'green' : 'blue-light'}`}
-                        >
-                          {customer.name.charAt(0).toUpperCase()}
-                        </div>
+                      <div className="udhaari-customer-cell" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <UdhaariCustomerAvatar photoUrl={customer.photoUrl} name={customer.name} cibilStatus={customer.cibilStatus} />
                         <div>
                           <div style={{ fontWeight: 700 }}>{customer.name}</div>
                           <div style={{ fontSize: '12px', color: '#64748b' }}>{customer.mobile}</div>
@@ -613,11 +619,6 @@ export const WebUdhaariScreen: React.FC = () => {
                     <td>
                       <span className="balance-green-text" style={{ color: '#16a34a' }}>
                         {formatIndianCurrency(customer.jama)}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ fontWeight: 800, color: customer.outstanding >= 0 ? '#dc2626' : '#16a34a' }}>
-                        {formatIndianCurrency(customer.outstanding)}
                       </span>
                     </td>
                     <td style={{ color: '#475569', fontSize: '13px' }}>
@@ -679,15 +680,8 @@ export const WebUdhaariScreen: React.FC = () => {
             {filteredCustomers.map((c) => (
               <div key={c.uid} className="mobile-customer-card" style={{ padding: '16px' }}>
                 <div className="mobile-card-top-row">
-                  <div className="mobile-card-customer-info">
-                    <div className="mobile-avatar-circle blue-bg">
-                      {c.name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </div>
+                  <div className="mobile-customer-info" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <UdhaariCustomerAvatar photoUrl={c.photoUrl} name={c.name} cibilStatus={c.cibilStatus} />
                     <div>
                       <div className="mobile-customer-name" style={{ fontWeight: 800, fontSize: '16px' }}>
                         {c.name}
@@ -698,13 +692,6 @@ export const WebUdhaariScreen: React.FC = () => {
                         </svg>
                         {c.area}
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="mobile-card-balance-box" style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Outstanding</div>
-                    <div style={{ color: c.outstanding >= 0 ? '#dc2626' : '#16a34a', fontWeight: 900, fontSize: '16px' }}>
-                      {formatIndianCurrency(c.outstanding)}
                     </div>
                   </div>
                 </div>

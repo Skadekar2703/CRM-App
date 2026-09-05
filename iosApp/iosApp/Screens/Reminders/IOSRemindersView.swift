@@ -27,6 +27,12 @@ struct IOSReminderItem: Identifiable {
 }
 
 struct IOSRemindersContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
+
     @State private var reminders: [IOSReminderItem] = [
         IOSReminderItem(
             id: "REM-1001",
@@ -42,38 +48,26 @@ struct IOSRemindersContentView: View {
         ),
         IOSReminderItem(
             id: "REM-1002",
-            customerId: "100024",
-            customerName: "Ramesh Textiles",
-            mobile: "9876543210",
-            scheduledAt: "29 Aug 2026, 02:30 PM",
+            customerId: "100028",
+            customerName: "adil hasan",
+            mobile: "9876543218",
+            scheduledAt: "15 Aug 2026, 11:30 AM",
             type: "Payment Follow-up",
-            priority: "Urgent",
+            priority: "High",
             status: "Pending",
-            notes: "Follow up regarding pending cheque of ₹1,80,000.",
+            notes: "Collect overdue amount ₹2,800. Customer promised payment today.",
             isOverdue: true
         ),
         IOSReminderItem(
             id: "REM-1003",
-            customerId: "100025",
-            customerName: "Vardhman Fabrics",
-            mobile: "9988776655",
-            scheduledAt: "31 Aug 2026, 11:00 AM",
-            type: "WhatsApp",
-            priority: "High",
-            status: "Pending",
-            notes: "Send cotton fabric catalogue and wholesale price list.",
-            isOverdue: false
-        ),
-        IOSReminderItem(
-            id: "REM-1004",
-            customerId: "100026",
-            customerName: "Sharma Wholesale",
+            customerId: "100015",
+            customerName: "Rajesh Kumar",
             mobile: "9811223344",
-            scheduledAt: "02 Sep 2026, 04:00 PM",
-            type: "Visit",
+            scheduledAt: "30 Aug 2026, 03:00 PM",
+            type: "Meeting",
             priority: "Normal",
-            status: "Snoozed",
-            notes: "Store visit for inventory stock audit.",
+            status: "Pending",
+            notes: "Discuss new fabric catalog & bulk discount terms.",
             isOverdue: false
         )
     ]
@@ -82,68 +76,52 @@ struct IOSRemindersContentView: View {
     @State private var selectedStatusChip = "All"
     @State private var showFormSheet = false
     @State private var editingReminder: IOSReminderItem? = nil
-    @State private var snoozingReminder: IOSReminderItem? = nil
-    @State private var deletingReminder: IOSReminderItem? = nil
-    @State private var showDeleteAlert = false
-    @State private var toastMsg: String? = nil
+
+    var overdueCount: Int { reminders.filter { $0.isOverdue && $0.status != "Done" }.count }
+    var thisWeekCount: Int { reminders.filter { $0.status == "Pending" && !$0.isOverdue }.count }
+    var totalPendingCount: Int { reminders.filter { $0.status == "Pending" }.count }
 
     var filteredReminders: [IOSReminderItem] {
         let q = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        return reminders.filter { r in
-            let matchesQuery = q.isEmpty ||
-                r.customerName.lowercased().contains(q) ||
-                r.mobile.contains(q) ||
-                r.type.lowercased().contains(q) ||
-                r.notes.lowercased().contains(q)
+        return reminders.filter { item in
+            let matchesSearch = q.isEmpty ||
+                item.customerName.lowercased().contains(q) ||
+                item.mobile.contains(q) ||
+                item.type.lowercased().contains(q) ||
+                item.notes.lowercased().contains(q)
 
-            let matchesStatus: Bool
+            let matchesChip: Bool
             switch selectedStatusChip {
-            case "Pending":
-                matchesStatus = r.status.caseInsensitiveCompare("Pending") == .orderedSame
-            case "Done":
-                matchesStatus = r.status.caseInsensitiveCompare("Done") == .orderedSame
-            case "Snoozed":
-                matchesStatus = r.status.caseInsensitiveCompare("Snoozed") == .orderedSame
-            default:
-                matchesStatus = true
+            case "Pending": matchesChip = item.status == "Pending"
+            case "Done": matchesChip = item.status == "Done"
+            case "Snoozed": matchesChip = item.status == "Snoozed"
+            default: matchesChip = true
             }
 
-            return matchesQuery && matchesStatus
+            return matchesSearch && matchesChip
         }
     }
 
-    var todaysCount: Int {
-        reminders.filter { ($0.status == "Pending" || $0.status == "Snoozed") && ($0.scheduledAt.contains("29 Aug") || $0.isOverdue) }.count
-    }
-
-    var thisWeekCount: Int {
-        reminders.filter { $0.status == "Pending" || $0.status == "Snoozed" }.count
-    }
-
-    var totalPendingCount: Int {
-        reminders.filter { $0.status == "Pending" || $0.status == "Snoozed" }.count
-    }
-
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+        ZStack {
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 14) {
-                // SUMMARY CARDS ROW
-                HStack(spacing: 10) {
+                // METRIC STAT CARDS
+                HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Today's")
+                        Text("Overdue")
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(.gray)
-                        Text("\(todaysCount)")
+                        Text("\(overdueCount)")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(.red)
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 

@@ -41,8 +41,8 @@ export const AreaModal: React.FC<AreaModalProps> = ({ isOpen, editingArea, onClo
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
             {editingArea ? 'Edit Area' : 'Add New Area'}
           </h3>
           <button className="icon-button" onClick={onClose}>✕</button>
@@ -50,13 +50,13 @@ export const AreaModal: React.FC<AreaModalProps> = ({ isOpen, editingArea, onClo
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {error && (
-            <div style={{ backgroundColor: '#fef2f2', color: '#dc2626', padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
+            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
               ⚠️ {error}
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+            <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>
               Area Name <span style={{ color: '#dc2626' }}>*</span>
             </label>
             <input

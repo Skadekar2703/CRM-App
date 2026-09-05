@@ -73,21 +73,20 @@ export const UdhaariHistoryModal: React.FC<UdhaariHistoryModalProps> = ({
       .select('type, amount')
       .or(`customer_id.eq.${custUid},customer_name.eq.${customer.name}`);
 
-    let bakiSum = 0;
+    let totalBakiGiven = 0;
     let jamaSum = 0;
     if (txns) {
       txns.forEach((t: any) => {
         const amt = Number(t.amount || 0);
         if (t.type === 'Baki' || t.type === 'Udhaar') {
-          bakiSum += amt;
-        } else if (t.type === 'Jama') {
-          bakiSum = Math.max(0, bakiSum - amt);
+          totalBakiGiven += amt;
+        } else if (t.type === 'Jama' || t.type === 'Payment' || t.type === 'Credit') {
           jamaSum += amt;
         }
       });
     }
 
-    await supabase.from('customers').update({ baki: bakiSum, jama: jamaSum }).eq('id', custUid);
+    await supabase.from('customers').update({ baki: totalBakiGiven, jama: jamaSum }).eq('id', custUid);
   };
 
   const handleEditClick = (txn: UdhaariTransaction) => {
@@ -142,7 +141,7 @@ export const UdhaariHistoryModal: React.FC<UdhaariHistoryModalProps> = ({
           <div>
             <h3 className="modal-title">Transaction History — {customer.name}</h3>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-              Area: {customer.area} | Outstanding: <strong style={{ color: customer.outstanding >= 0 ? '#dc2626' : '#16a34a' }}>{formatIndianCurrency(customer.outstanding)}</strong>
+              Area: {customer.area} | Total Baki: <strong style={{ color: '#dc2626' }}>{formatIndianCurrency(customer.baki)}</strong> | Total Jama: <strong style={{ color: '#16a34a' }}>{formatIndianCurrency(customer.jama)}</strong>
             </div>
           </div>
           <button className="modal-close-btn" onClick={onClose}>

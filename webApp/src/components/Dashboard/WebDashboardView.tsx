@@ -10,16 +10,18 @@ export const WebDashboardView: React.FC<WebDashboardViewProps> = ({ onSelectSect
   const [totalBaki, setTotalBaki] = useState<number>(0);
   const [totalJama, setTotalJama] = useState<number>(0);
   const [todayUdhar, setTodayUdhar] = useState<number>(0);
-  const [todayUdharCount, setTodayUdharCount] = useState<number>(0);
-  const [todayCollections, setTodayCollections] = useState<number>(0);
+  const [todayJama, setTodayJama] = useState<number>(0);
   const [pendingChequesCount, setPendingChequesCount] = useState<number>(0);
-  const [totalChequesCount, setTotalChequesCount] = useState<number>(0);
   const [urgentNotesCount, setUrgentNotesCount] = useState<number>(0);
   const [daagMoveCount, setDaagMoveCount] = useState<number>(0);
 
-  const [topDebtors, setTopDebtors] = useState<Array<{ name: string; area: string; amount: string; status: string; phone: string }>>([]);
-  const [notes, setNotes] = useState<Array<{ id: string; title: string; time: string; desc: string; colorClass: string }>>([]);
+  const [topDebtors, setTopDebtors] = useState<Array<{ id: string; name: string; area: string; amount: number; mobile: string; status: string; lastPayment: string }>>([]);
+  const [notes, setNotes] = useState<Array<{ id: string; title: string; content: string; priority: string; created_at: string }>>([]);
+  const [reminders, setReminders] = useState<Array<{ id: string; title: string; due_date: string; status: string }>>([]);
+  const [transactions, setTransactions] = useState<Array<{ id: string; customer_name: string; type: string; amount: number; date: string }>>([]);
+
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -27,90 +29,143 @@ export const WebDashboardView: React.FC<WebDashboardViewProps> = ({ onSelectSect
 
   const loadDashboardData = async () => {
     setIsLoading(true);
+    setErrorMsg(null);
     try {
-      // 1. Customers & Total Baki / Jama
-      const { data: custData } = await supabase.from('customers').select('*');
-      if (custData && custData.length > 0) {
-        let bakiSum = 0;
-        let jamaSum = 0;
-        const debtorsList = custData.map((c: any) => {
-          const rawBaki = Number(c.baki || 0);
-          if (rawBaki > 0) {
-            bakiSum += rawBaki;
-          } else if (rawBaki < 0) {
-            jamaSum += Math.abs(rawBaki);
-          }
-          return {
-            name: c.name || 'Unknown Customer',
-            area: c.area || 'Local Market',
-            amount: rawBaki.toLocaleString('en-IN'),
-            status: rawBaki > 20000 ? 'Overdue' : 'Pending',
-            phone: c.phone || ''
-          };
-        }).sort((a, b) => parseFloat(b.amount.replace(/,/g, '')) - parseFloat(a.amount.replace(/,/g, '')));
-        setTotalBaki(bakiSum);
-        setTotalJama(jamaSum);
-        setTopDebtors(debtorsList.slice(0, 5));
-      } else {
-        setTotalBaki(0);
-        setTotalJama(0);
-        setTopDebtors([]);
-      }
-
-      // 2. Today's Udhaar & Collections from Udhaari table
       const todayStr = new Date().toISOString().split('T')[0];
-      const { data: udhaariData } = await supabase.from('udhaari').select('*');
-      if (udhaariData) {
-        let todayUdharSum = 0;
-        let todayUdharCnt = 0;
-        let todayJamaSum = 0;
+
+      // 1. All Udhaari transactions for Total Baki, Total Jama, Today's Udhaar, Today's Jama
+      const { data: udhaariData, error: udhErr } = await supabase
+        .from('udhaari')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (udhErr) throw udhErr;
+
+      let bSum = 0;
+      let jSum = 0;
+      let tUdhar = 0;
+      let tJama = 0;
+
+      if (udhaariData && udhaariData.length > 0) {
         udhaariData.forEach((u: any) => {
-          const uDate = u.date ? u.date.split('T')[0] : '';
           const amt = Number(u.amount || 0);
-          if (u.type === 'Udhaar') {
-            if (uDate === todayStr || !uDate) {
-              todayUdharSum += amt;
-              todayUdharCnt++;
+          const uDate = u.date ? u.date.split('T')[0] : (u.created_at ? u.created_at.split('T')[0] : '');
+
+          if (u.type === 'Udhaar' || u.type === 'Baki') {
+            bSum += amt;
+            if (uDate === todayStr) {
+              tUdhar += amt;
             }
           } else if (u.type === 'Jama') {
-            if (uDate === todayStr || !uDate) {
-              todayJamaSum += amt;
+            jSum += amt;
+            if (uDate === todayStr) {
+              tJama += amt;
             }
           }
         });
-        setTodayUdhar(todayUdharSum);
-        setTodayUdharCount(todayUdharCnt);
-        setTodayCollections(todayJamaSum);
-      }
 
-      // 3. Cheques
-      const { data: chequeData } = await supabase.from('cheques').select('*');
-      if (chequeData) {
-        setTotalChequesCount(chequeData.length);
-        const pending = chequeData.filter((c: any) => c.status === 'Pending').length;
-        setPendingChequesCount(pending);
-      }
-
-      // 4. Notes
-      const { data: notesData } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
-      if (notesData && notesData.length > 0) {
-        setUrgentNotesCount(notesData.filter((n: any) => n.priority === 'High' || n.is_pinned).length);
-        setNotes(notesData.slice(0, 4).map((n: any) => ({
-          id: n.id,
-          title: n.title,
-          time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today',
-          desc: n.content || '',
-          colorClass: n.priority === 'High' ? 'red' : n.is_pinned ? 'blue' : 'gray'
+        setTransactions(udhaariData.slice(0, 5).map((u: any) => ({
+          id: u.id,
+          customer_name: u.customer_name || 'Customer',
+          type: u.type || 'Udhaar',
+          amount: Number(u.amount || 0),
+          date: u.date ? new Date(u.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'
         })));
+      } else {
+        setTransactions([]);
       }
 
-      // 5. Daag
-      const { data: daagData } = await supabase.from('daag').select('*');
+      setTotalBaki(bSum);
+      setTotalJama(jSum);
+      setTodayUdhar(tUdhar);
+      setTodayJama(tJama);
+
+      // 2. Customers for Top Baki Table
+      const { data: custData } = await supabase
+        .from('customers')
+        .select('*');
+
+      if (custData && custData.length > 0) {
+        const debtors: Array<{ id: string; name: string; area: string; amount: number; mobile: string; status: string; lastPayment: string }> = [];
+
+        custData.forEach((c: any) => {
+          const rawBaki = Number(c.baki || 0);
+          if (rawBaki > 0) {
+            debtors.push({
+              id: c.id,
+              name: c.name || 'Unnamed Customer',
+              area: c.area || 'General Market',
+              amount: rawBaki,
+              mobile: c.mobile || c.phone || 'N/A',
+              status: rawBaki > 20000 ? 'Overdue' : 'Pending',
+              lastPayment: c.updated_at ? new Date(c.updated_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recent'
+            });
+          }
+        });
+
+        debtors.sort((a, b) => b.amount - a.amount);
+        setTopDebtors(debtors.slice(0, 5));
+      } else {
+        setTopDebtors([]);
+      }
+
+      // 3. Pending Cheques
+      const { data: chequeData } = await supabase
+        .from('cheques')
+        .select('*');
+
+      if (chequeData && chequeData.length > 0) {
+        const pending = chequeData.filter((c: any) => c.status === 'Pending' || c.status === 'Overdue');
+        setPendingChequesCount(pending.length);
+      } else {
+        setPendingChequesCount(0);
+      }
+
+      // 4. Urgent Notes
+      const { data: notesData } = await supabase
+        .from('notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (notesData && notesData.length > 0) {
+        const urgent = notesData.filter((n: any) => n.priority === 'High' || n.is_pinned || n.is_urgent);
+        setUrgentNotesCount(urgent.length);
+        setNotes(urgent.slice(0, 3));
+      } else {
+        setUrgentNotesCount(0);
+        setNotes([]);
+      }
+
+      // 5. Today's Reminders
+      const { data: remindersData } = await supabase
+        .from('reminders')
+        .select('*')
+        .order('due_date', { ascending: true });
+
+      if (remindersData && remindersData.length > 0) {
+        const todayReminders = remindersData.filter((r: any) => {
+          if (!r.due_date) return false;
+          return r.due_date.split('T')[0] === todayStr;
+        });
+        setReminders(todayReminders);
+      } else {
+        setReminders([]);
+      }
+
+      // 6. Daag Movement
+      const { data: daagData } = await supabase
+        .from('daag')
+        .select('*');
+
       if (daagData) {
         setDaagMoveCount(daagData.length);
+      } else {
+        setDaagMoveCount(0);
       }
-    } catch (e) {
-      console.log('Error loading dashboard data:', e);
+
+    } catch (e: any) {
+      console.error('Error loading dashboard data:', e);
+      setErrorMsg(e.message || 'Unable to load live dashboard data.');
     } finally {
       setIsLoading(false);
     }
@@ -124,252 +179,342 @@ export const WebDashboardView: React.FC<WebDashboardViewProps> = ({ onSelectSect
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="crm-content">
+        <div className="dashboard-loading-box">
+          <div className="spinner"></div>
+          <p style={{ marginTop: '12px', fontWeight: 600, color: '#64748B' }}>Loading real-time CRM ledger data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="crm-content">
+        <div className="dashboard-error-box">
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#DC2626', marginBottom: '8px' }}>⚠️ Unable to load data</div>
+          <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '16px' }}>{errorMsg}</p>
+          <button className="primary-btn" onClick={loadDashboardData} style={{ padding: '8px 18px' }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="crm-content">
-      {/* QUICK ACTIONS ROW */}
-      <div className="quick-actions-row">
-        <div className="quick-action-card" onClick={() => handleNavigate('Customers')} style={{ cursor: 'pointer' }}>
-          <div className="action-icon-wrapper customer">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
-          </div>
-          <span>+ Customer</span>
+      {/* HEADER / LIVE SYSTEM SYNC BAR */}
+      <div className="stitch-dashboard-subbar">
+        <div>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800 }}>BUSINESS SNAPSHOT</h2>
+          <span style={{ fontSize: '12px', color: '#64748B' }}>Real-time ledger, daily balance and collection summary</span>
         </div>
-
-        <div className="quick-action-card" onClick={() => handleNavigate('Udhaari')} style={{ cursor: 'pointer' }}>
-          <div className="action-icon-wrapper udhar">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <span>+ Udhar</span>
-        </div>
-
-        <div className="quick-action-card" onClick={() => handleNavigate('Udhaari')} style={{ cursor: 'pointer' }}>
-          <div className="action-icon-wrapper jama">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <span>+ Jama</span>
-        </div>
-
-        <div className="quick-action-card" onClick={() => handleNavigate('Daag')} style={{ cursor: 'pointer' }}>
-          <div className="action-icon-wrapper daag">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </div>
-          <span>+ Daag</span>
+        <div className="live-badge">
+          <span className="dot"></span> Live System Synced
         </div>
       </div>
 
-      {/* STATS GRID */}
-      <div className="stats-grid">
-        <div className="stat-card" onClick={() => handleNavigate('Customers')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>TOTAL BAKI</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1" />
-            </svg>
+      {/* SUMMARY METRICS GRID (7 CARDS REQUIRED IN EXACT ORDER) */}
+      <div className="stitch-metrics-grid">
+        {/* 1. TOTAL BAKI */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Customers')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">TOTAL BAKI</span>
+            <span className="metric-badge red">Receivable</span>
           </div>
-          <div className="stat-value">₹{totalBaki.toLocaleString('en-IN')}</div>
-          <div className="stat-sub red-text">Receivable</div>
+          <div className="metric-value red-text">₹{totalBaki.toLocaleString('en-IN')}</div>
+          <div className="metric-sub">Sum of all Baki</div>
         </div>
 
-        <div className="stat-card" onClick={() => handleNavigate('Customers')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>TOTAL JAMA</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+        {/* 2. TOTAL JAMA */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Customers')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">TOTAL JAMA</span>
+            <span className="metric-badge green">Received</span>
           </div>
-          <div className="stat-value" style={{ color: '#16a34a' }}>₹{totalJama.toLocaleString('en-IN')}</div>
-          <div className="stat-sub positive">Received</div>
+          <div className="metric-value green-text">₹{totalJama.toLocaleString('en-IN')}</div>
+          <div className="metric-sub">Sum of all Jama</div>
         </div>
 
-        <div className="stat-card" onClick={() => handleNavigate('Udhaari')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>TODAY UDHAR</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+        {/* 3. TODAY'S UDHAAR */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Udhaari')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">TODAY'S UDHAAR</span>
+            <span className="metric-badge blue">Credit</span>
           </div>
-          <div className="stat-value">₹{todayUdhar.toLocaleString('en-IN')}</div>
-          <div className="stat-sub">{todayUdharCount} Transactions</div>
+          <div className="metric-value">₹{todayUdhar.toLocaleString('en-IN')}</div>
+          <div className="metric-sub">Given Today</div>
         </div>
 
-        <div className="stat-card" onClick={() => handleNavigate('Udhaari')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>TODAY'S COLLECTIONS</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+        {/* 4. TODAY'S JAMA */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Udhaari')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">TODAY'S JAMA</span>
+            <span className="metric-badge green">Jama</span>
           </div>
-          <div className="stat-value">₹{todayCollections.toLocaleString('en-IN')}</div>
-          <div className="stat-sub positive">Jama total</div>
+          <div className="metric-value green-text">₹{todayJama.toLocaleString('en-IN')}</div>
+          <div className="metric-sub">Received Today</div>
         </div>
 
-        <div className="stat-card" onClick={() => handleNavigate('Cheques')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>CHEQUES</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+        {/* 5. CHEQUES */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Cheques')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">CHEQUES</span>
+            <span className="metric-badge yellow">Pending</span>
           </div>
-          <div className="stat-value">{totalChequesCount}</div>
-          <div className="stat-sub warning">{pendingChequesCount} Pending Clearance</div>
+          <div className="metric-value">{pendingChequesCount}</div>
+          <div className="metric-sub">Pending Clearance</div>
         </div>
 
-        <div className="stat-card" onClick={() => handleNavigate('Notepad')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>URGENT NOTES</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+        {/* 6. URGENT NOTES */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Notepad')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">URGENT NOTES</span>
+            <span className="metric-badge red">High</span>
           </div>
-          <div className="stat-value">{urgentNotesCount}</div>
-          <div className="stat-sub">High priority/pinned</div>
+          <div className="metric-value">{urgentNotesCount}</div>
+          <div className="metric-sub">Pinned Notes</div>
         </div>
 
-        <div className="stat-card" onClick={() => handleNavigate('Daag')} style={{ cursor: 'pointer' }}>
-          <div className="stat-header">
-            <span>DAAG MOVE</span>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
+        {/* 7. DAAG MOVE */}
+        <div className="stitch-metric-card" onClick={() => handleNavigate('Daag')} style={{ cursor: 'pointer' }}>
+          <div className="metric-header">
+            <span className="metric-title">DAAG MOVE</span>
+            <span className="metric-badge blue">Dispatched</span>
           </div>
-          <div className="stat-value">{daagMoveCount}</div>
-          <div className="stat-sub" style={{ color: '#0284c7' }}>Items dispatched</div>
+          <div className="metric-value">{daagMoveCount}</div>
+          <div className="metric-sub">Stock Records</div>
         </div>
       </div>
 
-      {/* DASHBOARD GRID */}
-      <div className="dashboard-grid">
+      {/* FOUR PRIMARY SHORTCUTS */}
+      <div className="stitch-shortcuts-grid">
+        <div className="stitch-shortcut-btn shortcut-customer" onClick={() => handleNavigate('Customers')}>
+          <div className="shortcut-icon-circle green">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+          </div>
+          <div>
+            <div className="shortcut-title">+ Customer</div>
+            <div className="shortcut-sub">Add new party</div>
+          </div>
+        </div>
+
+        <div className="stitch-shortcut-btn shortcut-udhar" onClick={() => handleNavigate('Udhaari')}>
+          <div className="shortcut-icon-circle red">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          <div>
+            <div className="shortcut-title">+ Udhar</div>
+            <div className="shortcut-sub">Debit / Give credit</div>
+          </div>
+        </div>
+
+        <div className="stitch-shortcut-btn shortcut-jama" onClick={() => handleNavigate('Udhaari')}>
+          <div className="shortcut-icon-circle emerald">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <div className="shortcut-title">+ Jama</div>
+            <div className="shortcut-sub">Credit / Receive payment</div>
+          </div>
+        </div>
+
+        <div className="stitch-shortcut-btn shortcut-daag" onClick={() => handleNavigate('Daag')}>
+          <div className="shortcut-icon-circle blue">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2m-4-1v8m0 0l3-3m-3 3L9 8" />
+            </svg>
+          </div>
+          <div>
+            <div className="shortcut-title">+ Daag</div>
+            <div className="shortcut-sub">Record stock dispatch</div>
+          </div>
+        </div>
+      </div>
+
+      {/* DASHBOARD MAIN CONTENT SPLIT GRID */}
+      <div className="stitch-dashboard-main-grid">
         {/* LEFT COLUMN */}
-        <div className="left-column">
-          {/* DEBTORS TABLE */}
+        <div className="stitch-column">
+          {/* TOP BAKI (DEBTORS) PROPER TABLE */}
           <div className="card-box">
             <div className="card-box-header">
-              <div className="card-box-title">Top Baki (Debtors)</div>
-              <button className="card-box-link" onClick={() => handleNavigate('Customers')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>View All</button>
+              <div>
+                <h3 className="card-box-title">Top Baki (Debtors)</h3>
+                <span className="card-box-sub">Parties with highest total Baki balances</span>
+              </div>
+              <button className="text-link-btn" onClick={() => handleNavigate('Customers')}>
+                View All →
+              </button>
             </div>
 
-            <table className="debtors-table">
-              <thead>
-                <tr>
-                  <th>Customer Name</th>
-                  <th>Area</th>
-                  <th>Amount (₹)</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topDebtors.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: '16px' }}>
-                      {isLoading ? 'Loading customers...' : 'No debtors found'}
-                    </td>
-                  </tr>
-                ) : (
-                  topDebtors.map((d, index) => (
-                    <tr key={index}>
-                      <td className="customer-name-td">{d.name}</td>
-                      <td>{d.area}</td>
-                      <td className="amount-td">{d.amount}</td>
-                      <td>
-                        <span className={`badge ${d.status.toLowerCase()}`}>{d.status}</span>
-                      </td>
-                      <td>
-                        {d.phone ? (
-                          <a href={`tel:${d.phone}`} className="icon-button" aria-label="Call customer" title={`Call ${d.phone}`}>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                          </a>
-                        ) : (
-                          <button className="icon-button" onClick={() => handleNavigate('Customers')}>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                        )}
-                      </td>
+            {topDebtors.length === 0 ? (
+              <div className="empty-state-box">
+                <div className="empty-icon">🤝</div>
+                <div className="empty-title">No active Baki records</div>
+                <div className="empty-sub">All customer receivables are fully settled.</div>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="stitch-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', paddingLeft: '16px' }}>CUSTOMER NAME</th>
+                      <th style={{ textAlign: 'left' }}>AREA</th>
+                      <th style={{ textAlign: 'left' }}>LAST PAYMENT</th>
+                      <th style={{ textAlign: 'center' }}>STATUS</th>
+                      <th style={{ textAlign: 'right' }}>AMOUNT (₹)</th>
+                      <th style={{ textAlign: 'center', paddingRight: '16px' }}>ACTION</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {topDebtors.map((d) => (
+                      <tr key={d.id} className="stitch-table-row">
+                        <td style={{ textAlign: 'left', paddingLeft: '16px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '14px' }}>{d.name}</div>
+                          <div style={{ fontSize: '12px', color: '#64748B' }}>Ph: {d.mobile}</div>
+                        </td>
+                        <td style={{ textAlign: 'left', fontSize: '13px', color: '#334155' }}>{d.area}</td>
+                        <td style={{ textAlign: 'left', fontSize: '13px', color: '#64748B' }}>{d.lastPayment}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className={`status-pill ${d.status.toLowerCase()}`}>{d.status}</span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 800, fontSize: '14px', color: '#DC2626' }}>
+                          ₹{d.amount.toLocaleString('en-IN')}
+                        </td>
+                        <td style={{ textAlign: 'center', paddingRight: '16px' }}>
+                          <button
+                            className="action-icon-btn"
+                            onClick={() => handleNavigate('Customers')}
+                            title="View Customer Profile"
+                          >
+                            📞
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {/* RISKY PAYMENTS */}
+          {/* RECENT TRANSACTIONS */}
           <div className="card-box">
             <div className="card-box-header">
-              <div className="card-box-title">
-                <svg width="18" height="18" fill="none" stroke="#dc2626" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                Risky Payments / Pending Cheques
+              <div>
+                <h3 className="card-box-title">Recent Transactions</h3>
+                <span className="card-box-sub">Latest credit & debit journal activity</span>
               </div>
+              <button className="text-link-btn" onClick={() => handleNavigate('Udhaari')}>
+                View Log →
+              </button>
             </div>
 
-            <div className="risky-cards-grid">
-              <div className="risky-card">
-                <div className="risky-card-header">
-                  <span className="risky-card-name">Cheque Clearance</span>
-                  <span className="badge high-risk">Attention</span>
-                </div>
-                <p className="risky-card-desc">Review pending cheques and bounced transactions.</p>
-                <div className="risky-card-footer">
-                  <span className="risky-card-amount">{pendingChequesCount} Cheques</span>
-                  <button className="view-details-btn" onClick={() => handleNavigate('Cheques')}>View Details</button>
-                </div>
+            {transactions.length === 0 ? (
+              <div className="empty-state-box">
+                <div className="empty-icon">📖</div>
+                <div className="empty-title">No recent transactions</div>
+                <div className="empty-sub">No Jama or Udhar entries recorded yet.</div>
               </div>
-            </div>
+            ) : (
+              <div className="transactions-list">
+                {transactions.map((t) => (
+                  <div key={t.id} className="transaction-row">
+                    <div className="tx-left">
+                      <div className={`tx-icon ${t.type === 'Jama' ? 'jama' : 'udhar'}`}>
+                        {t.type === 'Jama' ? '↓' : '↑'}
+                      </div>
+                      <div>
+                        <div className="tx-name">{t.customer_name}</div>
+                        <div className="tx-meta">{t.type} • {t.date}</div>
+                      </div>
+                    </div>
+                    <div className={`tx-amount ${t.type === 'Jama' ? 'jama-text' : 'udhar-text'}`}>
+                      {t.type === 'Jama' ? `- ₹${t.amount.toLocaleString('en-IN')}` : `+ ₹${t.amount.toLocaleString('en-IN')}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* RIGHT COLUMN - PINNED NOTES */}
-        <div className="card-box">
-          <div className="card-box-header">
-            <div className="card-box-title">
-              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
-              Pinned & Urgent Notes
+        {/* RIGHT COLUMN */}
+        <div className="stitch-column">
+          {/* PINNED & URGENT NOTES */}
+          <div className="card-box">
+            <div className="card-box-header">
+              <div>
+                <h3 className="card-box-title">📌 Pinned & Urgent Notes</h3>
+                <span className="card-box-sub">Urgent reminders and pinned store notes</span>
+              </div>
+              <button className="text-link-btn" onClick={() => handleNavigate('Notepad')}>
+                Go to Notepad
+              </button>
             </div>
+
+            {notes.length === 0 ? (
+              <div className="empty-state-box">
+                <div className="empty-icon">📝</div>
+                <div className="empty-title">No notes available</div>
+                <div className="empty-sub">Create notes in Notepad to pin urgent tasks here.</div>
+              </div>
+            ) : (
+              <div className="notes-list">
+                {notes.map((n) => (
+                  <div key={n.id} className={`note-card-item ${n.priority === 'High' ? 'urgent' : ''}`}>
+                    <div className="note-item-title">{n.title}</div>
+                    <div className="note-item-desc">{n.content}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="notes-panel">
-            {notes.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px' }}>
-                {isLoading ? 'Loading notes...' : 'No notes available.'}
-              </p>
-            ) : (
-              notes.map((n) => (
-                <div key={n.id} className={`note-item ${n.colorClass}`}>
-                  <div className="note-header">
-                    <span className="note-title">{n.title}</span>
-                    <span className="note-time">{n.time}</span>
-                  </div>
-                  <p className="note-desc">{n.desc}</p>
-                </div>
-              ))
-            )}
+          {/* TODAY'S REMINDERS */}
+          <div className="card-box">
+            <div className="card-box-header">
+              <div>
+                <h3 className="card-box-title">⏰ Today's Reminders</h3>
+                <span className="card-box-sub">Scheduled collection follow-ups for today</span>
+              </div>
+              <button className="text-link-btn" onClick={() => handleNavigate('Reminders')}>
+                View All
+              </button>
+            </div>
 
-            <button className="add-note-btn" onClick={() => handleNavigate('Notepad')}>
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add New Note
-            </button>
+            {reminders.length === 0 ? (
+              <div className="empty-state-box">
+                <div className="empty-icon">🔔</div>
+                <div className="empty-title">No reminders today</div>
+                <div className="empty-sub">You have no follow-up reminders scheduled for today.</div>
+              </div>
+            ) : (
+              <div className="reminders-list">
+                {reminders.map((rem) => (
+                  <div key={rem.id} className="reminder-item-row">
+                    <div>
+                      <div className="reminder-title">{rem.title}</div>
+                      <div className="reminder-sub">{rem.due_date ? new Date(rem.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}</div>
+                    </div>
+                    <span className="status-pill pending">{rem.status || 'Scheduled'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 };
-

@@ -11,8 +11,10 @@ export interface UdhaariCustomer {
   balance: number;
   balanceType: 'Baki' | 'Jama';
   creditLimit: number;
+  creditBlocked?: boolean;
   lastTxnDate: string;
   status: 'Active' | 'Inactive';
+  photoUrl?: string | null;
 }
 
 export interface UdhaariTransaction {

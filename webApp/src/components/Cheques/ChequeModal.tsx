@@ -18,6 +18,54 @@ interface ChequeModalProps {
   ) => void;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export const formatIsoToDisplay = (isoStr: string): string => {
+  if (!isoStr) return '';
+  const clean = isoStr.split('T')[0];
+  const parts = clean.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parts[0];
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const day = parts[2].padStart(2, '0');
+    if (monthIdx >= 0 && monthIdx < 12) {
+      return `${day} ${MONTHS[monthIdx]} ${year}`;
+    }
+  }
+  return isoStr;
+};
+
+export const parseAnyToIso = (dateStr: string): string => {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const parts = dateStr.trim().split(/[\s-]+/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      const monthIdx = MONTHS.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase());
+      const monthNum = monthIdx >= 0 ? String(monthIdx + 1).padStart(2, '0') : parts[1].padStart(2, '0');
+      return `${parts[0]}-${monthNum}-${parts[2].padStart(2, '0')}`;
+    } else {
+      const day = parts[0].padStart(2, '0');
+      const monthStr = parts[1];
+      const year = parts[2];
+      const monthIdx = MONTHS.findIndex((m) => m.toLowerCase() === monthStr.toLowerCase());
+      if (monthIdx >= 0) {
+        const monthNum = String(monthIdx + 1).padStart(2, '0');
+        return `${year}-${monthNum}-${day}`;
+      }
+    }
+  }
+  return dateStr;
+};
+
+const getTodayIso = (): string => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const ChequeModal: React.FC<ChequeModalProps> = ({
   isOpen,
   editingCheque,
@@ -29,8 +77,8 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
   const [bankName, setBankName] = useState('');
   const [amount, setAmount] = useState('');
   const [direction, setDirection] = useState<'Inward' | 'Outward'>('Inward');
-  const [issueDate, setIssueDate] = useState('Oct 12, 2023');
-  const [dueDate, setDueDate] = useState('Oct 25, 2023');
+  const [issueDateIso, setIssueDateIso] = useState(getTodayIso());
+  const [dueDateIso, setDueDateIso] = useState(getTodayIso());
   const [status, setStatus] = useState<'Pending' | 'Cleared' | 'Bounced'>('Pending');
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -42,8 +90,8 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
       setBankName(editingCheque.bankName);
       setAmount(editingCheque.amount.toString());
       setDirection(editingCheque.direction);
-      setIssueDate(editingCheque.issueDate);
-      setDueDate(editingCheque.dueDate);
+      setIssueDateIso(parseAnyToIso(editingCheque.issueDate) || getTodayIso());
+      setDueDateIso(parseAnyToIso(editingCheque.dueDate) || getTodayIso());
       setStatus(editingCheque.status);
       setNotes(editingCheque.notes);
     } else {
@@ -52,8 +100,9 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
       setBankName('HDFC Bank');
       setAmount('');
       setDirection('Inward');
-      setIssueDate('Oct 12, 2023');
-      setDueDate('Oct 25, 2023');
+      const today = getTodayIso();
+      setIssueDateIso(today);
+      setDueDateIso(today);
       setStatus('Pending');
       setNotes('');
     }
@@ -74,14 +123,24 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
       return;
     }
 
+    if (!issueDateIso) {
+      setErrorMsg('Issue Date is required.');
+      return;
+    }
+
+    if (dueDateIso && issueDateIso && dueDateIso < issueDateIso) {
+      setErrorMsg('Due Date cannot be earlier than Issue Date.');
+      return;
+    }
+
     onSave(
       chequeNo.trim() || 'CHQ-2023-' + Math.floor(1000 + Math.random() * 9000),
       partyName.trim(),
       bankName.trim() || 'HDFC Bank',
       amtNum,
       direction,
-      issueDate.trim() || 'Oct 12, 2023',
-      dueDate.trim() || 'Oct 25, 2023',
+      formatIsoToDisplay(issueDateIso),
+      formatIsoToDisplay(dueDateIso),
       status,
       notes.trim()
     );
@@ -102,7 +161,7 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
 
         <form onSubmit={handleSubmit} className="modal-body">
           {errorMsg && (
-            <div style={{ backgroundColor: '#fef2f2', color: '#dc2626', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
+            <div style={{ backgroundColor: '#fef2f2', color: '#dc2626', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, border: '1px solid #fecaca' }}>
               ⚠️ {errorMsg}
             </div>
           )}
@@ -178,25 +237,57 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Issue Date</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. Oct 12, 2023"
-                value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
-              />
+              <label className="form-label">Issue Date *</label>
+              <div
+                className="date-picker-input-field"
+                onClick={(e) => {
+                  const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                  if (inputEl && typeof inputEl.showPicker === 'function') {
+                    try { inputEl.showPicker(); } catch {}
+                  }
+                }}
+              >
+                <span className="date-picker-value-text">
+                  {formatIsoToDisplay(issueDateIso) || 'Select Issue Date'}
+                </span>
+                <span className="date-picker-calendar-icon">📅</span>
+                <input
+                  type="date"
+                  className="date-input-overlay"
+                  value={issueDateIso}
+                  onChange={(e) => {
+                    setIssueDateIso(e.target.value);
+                    if (errorMsg) setErrorMsg(null);
+                  }}
+                />
+              </div>
             </div>
 
             <div className="form-group">
               <label className="form-label">Due Date</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. Oct 25, 2023"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+              <div
+                className="date-picker-input-field"
+                onClick={(e) => {
+                  const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                  if (inputEl && typeof inputEl.showPicker === 'function') {
+                    try { inputEl.showPicker(); } catch {}
+                  }
+                }}
+              >
+                <span className="date-picker-value-text">
+                  {formatIsoToDisplay(dueDateIso) || 'Select Due Date'}
+                </span>
+                <span className="date-picker-calendar-icon">📅</span>
+                <input
+                  type="date"
+                  className="date-input-overlay"
+                  value={dueDateIso}
+                  onChange={(e) => {
+                    setDueDateIso(e.target.value);
+                    if (errorMsg) setErrorMsg(null);
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -224,3 +315,4 @@ export const ChequeModal: React.FC<ChequeModalProps> = ({
     </div>
   );
 };
+

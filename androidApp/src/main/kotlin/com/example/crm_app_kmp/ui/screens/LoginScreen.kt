@@ -58,13 +58,14 @@ import com.example.crm_app_kmp.ui.theme.TextPrimary
 @Composable
 fun LoginScreen(
     onNavigateToSignUp: () -> Unit,
-    onLoginClick: (email: String, password: String) -> Unit,
+    onLoginClick: (username: String, password: String, role: String) -> Unit,
     onForgotPasswordClick: (email: String) -> Unit,
     isLoading: Boolean = false,
     errorMessage: String? = null,
     successMessage: String? = null
 ) {
-    var email by remember { mutableStateOf("") }
+    var selectedRole by remember { mutableStateOf("ADMIN") }
+    var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
     var isPasswordVisible by remember { mutableStateOf(false) }
@@ -73,7 +74,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DeepNavy)
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -92,7 +93,7 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .widthIn(max = 440.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = CardBackground,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 shadowElevation = 8.dp
             ) {
                 Column(
@@ -101,14 +102,56 @@ fun LoginScreen(
                 ) {
                     CrmLogo(size = 72.dp, fontSize = 22)
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    Text(
-                        text = "Login",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    // ROLE SELECTION TABS
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    selectedRole = "ADMIN"
+                                    localError = null
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selectedRole == "ADMIN") PrimaryBlue else Color.Transparent
+                        ) {
+                            Text(
+                                text = "ADMIN LOGIN",
+                                color = if (selectedRole == "ADMIN") Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            )
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    selectedRole = "STAFF"
+                                    localError = null
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selectedRole == "STAFF") PrimaryBlue else Color.Transparent
+                        ) {
+                            Text(
+                                text = "STAFF LOGIN",
+                                color = if (selectedRole == "STAFF") Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(20.dp))
 
@@ -151,17 +194,17 @@ fun LoginScreen(
                         }
                     }
 
-                    // Email Field
+                    // Username Field
                     CustomTextField(
-                        label = "Email / Username",
-                        value = email,
+                        label = "Username",
+                        value = username,
                         onValueChange = {
-                            email = it
+                            username = it
                             localError = null
                         },
-                        placeholder = "Enter your email",
+                        placeholder = "Enter your username",
                         leadingIcon = Icons.Default.Email,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -191,7 +234,7 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Remember Me & Forgot Password Row
+                    // Remember Me & Admin Forgot Password Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -216,20 +259,22 @@ fun LoginScreen(
                             )
                         }
 
-                        Text(
-                            text = "Forgot Password?",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = PrimaryBlue,
-                            modifier = Modifier.clickable {
-                                if (email.isBlank()) {
-                                    localError = "Please enter your email address to reset password."
-                                } else {
-                                    localError = null
-                                    onForgotPasswordClick(email)
+                        if (selectedRole == "ADMIN") {
+                            Text(
+                                text = "Forgot Password?",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = PrimaryBlue,
+                                modifier = Modifier.clickable {
+                                    if (username.isBlank()) {
+                                        localError = "Please enter your admin username to reset password."
+                                    } else {
+                                        localError = null
+                                        onForgotPasswordClick("$username@business.crm")
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -237,13 +282,13 @@ fun LoginScreen(
                     // Login Button
                     Button(
                         onClick = {
-                            if (email.isBlank()) {
-                                localError = "Email is required."
+                            if (username.isBlank()) {
+                                localError = "Username is required."
                             } else if (password.isBlank()) {
                                 localError = "Password is required."
                             } else {
                                 localError = null
-                                onLoginClick(email, password)
+                                onLoginClick(username, password, selectedRole)
                             }
                         },
                         enabled = !isLoading,
@@ -252,8 +297,10 @@ fun LoginScreen(
                             .height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = DeepNavy,
-                            contentColor = Color.White
+                            containerColor = PrimaryBlue,
+                            contentColor = Color.White,
+                            disabledContainerColor = PrimaryBlue.copy(alpha = 0.5f),
+                            disabledContentColor = Color.White.copy(alpha = 0.7f)
                         )
                     ) {
                         if (isLoading) {
@@ -266,31 +313,12 @@ fun LoginScreen(
                             Text(
                                 text = "Login",
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Navigation Link to Signup
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Don't have an account? ",
-                            fontSize = 14.sp,
-                            color = TextMuted
-                        )
-                        Text(
-                            text = "Sign Up",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryBlue,
-                            modifier = Modifier.clickable(enabled = !isLoading) { onNavigateToSignUp() }
-                        )
-                    }
                 }
             }
 
@@ -300,7 +328,7 @@ fun LoginScreen(
             Text(
                 text = "© 2026 Dashboard System. All rights reserved.",
                 fontSize = 12.sp,
-                color = Color.White.copy(alpha = 0.7f),
+                color = TextMuted,
                 textAlign = TextAlign.Center
             )
 

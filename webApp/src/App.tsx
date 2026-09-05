@@ -2,14 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { WebLoginScreen } from './components/Auth/WebLoginScreen';
-import { WebSignUpScreen } from './components/Auth/WebSignUpScreen';
 import { WebDashboard } from './components/Dashboard/WebDashboard';
 
 export const App: React.FC = () => {
-  const [screen, setScreen] = useState<'login' | 'signup'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
+  useEffect(() => {
+    const saved = localStorage.getItem('crm_theme');
+    const isDark = saved ? saved === 'dark' : true;
+    const themeStr = isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', themeStr);
+    if (isDark) {
+      document.body.classList.add('dark-theme');
+    } else {
+      document.body.classList.remove('dark-theme');
+    }
+  }, []);
 
   const syncProfile = async (authUser: User) => {
     try {
@@ -61,7 +70,6 @@ export const App: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setUsername(undefined);
-        setScreen('login');
       }
       setIsLoading(false);
     });
@@ -73,13 +81,12 @@ export const App: React.FC = () => {
     await supabase.auth.signOut();
     setUser(null);
     setUsername(undefined);
-    setScreen('login');
   };
 
   if (isLoading) {
     return (
       <div className="auth-container">
-        <div style={{ color: '#ffffff', fontSize: '16px', fontWeight: 600 }}>
+        <div style={{ color: 'var(--text-primary, #ffffff)', fontSize: '16px', fontWeight: 600 }}>
           Loading CRM...
         </div>
       </div>
@@ -96,13 +103,5 @@ export const App: React.FC = () => {
     );
   }
 
-  return (
-    <>
-      {screen === 'login' ? (
-        <WebLoginScreen onNavigateToSignUp={() => setScreen('signup')} />
-      ) : (
-        <WebSignUpScreen onNavigateToLogin={() => setScreen('login')} />
-      )}
-    </>
-  );
+  return <WebLoginScreen />;
 };

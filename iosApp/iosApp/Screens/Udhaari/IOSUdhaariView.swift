@@ -10,6 +10,7 @@ struct UdhaariCustomerIOSItem: Identifiable {
     var jama: Double
     var outstanding: Double
     var lastTxnDate: String
+    var photoUrl: String?
 }
 
 func formatIndianCurrencySwift(_ amount: Double) -> String {
@@ -48,9 +49,23 @@ struct IOSUdhaariContentView: View {
     @State private var editingCustomer: UdhaariCustomerIOSItem? = nil
     @State private var deletingCustomer: UdhaariCustomerIOSItem? = nil
 
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
-    private let bgLight = Color(red: 248/255, green: 250/255, blue: 252/255)
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var textPrimary: Color {
+        isDarkMode ? Color(red: 248/255, green: 250/255, blue: 252/255) : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+    private var bgLight: Color {
+        isDarkMode ? Color(red: 11/255, green: 18/255, blue: 32/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
+    }
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white
+    }
+    private var cardBorder: Color {
+        isDarkMode ? Color(red: 51/255, green: 65/255, blue: 85/255) : Color(red: 226/255, green: 232/255, blue: 240/255)
+    }
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
     private let errorRed = Color(red: 220/255, green: 38/255, blue: 38/255)
     private let successGreen = Color(red: 22/255, green: 163/255, blue: 74/255)
@@ -63,19 +78,19 @@ struct IOSUdhaariContentView: View {
                     self.customers = items.map { item in
                         let rawBaki = (item["baki"] as? NSNumber)?.doubleValue ?? 0.0
                         let rawJama = (item["jama"] as? NSNumber)?.doubleValue ?? 0.0
-                        let bakiVal = rawBaki >= 0 ? rawBaki : 0.0
-                        let jamaVal = rawBaki < 0 ? abs(rawBaki) : rawJama
-                        let outVal = bakiVal - jamaVal
+                        let currentBaki = max(0.0, rawBaki - rawJama)
+                        let photoStr = item["photo_url"] as? String
                         return UdhaariCustomerIOSItem(
                             id: item["id"] as? String ?? UUID().uuidString,
                             name: item["name"] as? String ?? "Customer",
                             mobile: item["phone"] as? String ?? "",
                             area: item["area"] as? String ?? "Local Market",
                             cibilStatus: item["cibil_status"] as? String ?? "Good",
-                            baki: bakiVal,
-                            jama: jamaVal,
-                            outstanding: outVal,
-                            lastTxnDate: "Recent"
+                            baki: currentBaki,
+                            jama: rawJama,
+                            outstanding: currentBaki,
+                            lastTxnDate: "Recent",
+                            photoUrl: photoStr
                         )
                     }
                 case .failure:
@@ -90,9 +105,6 @@ struct IOSUdhaariContentView: View {
     }
     var totalJama: Double {
         customers.reduce(0) { $0 + $1.jama }
-    }
-    var totalOutstanding: Double {
-        totalBaki - totalJama
     }
 
     var filteredCustomers: [UdhaariCustomerIOSItem] {
@@ -120,7 +132,7 @@ struct IOSUdhaariContentView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
-                        .background(Color.white)
+                        .background(cardBg)
                         .cornerRadius(10)
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -135,22 +147,22 @@ struct IOSUdhaariContentView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
-                        .background(Color.white)
+                        .background(cardBg)
                         .cornerRadius(10)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Outstanding")
+                            Text("CUSTOMERS")
                                 .font(.caption2)
                                 .fontWeight(.bold)
-                                .foregroundColor(textPrimary)
-                            Text(formatIndianCurrencySwift(totalOutstanding))
+                                .foregroundColor(textMuted)
+                            Text("\(customers.count)")
                                 .font(.subheadline)
                                 .fontWeight(.bold)
-                                .foregroundColor(totalOutstanding >= 0 ? errorRed : successGreen)
+                                .foregroundColor(primaryBlue)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
-                        .background(Color.white)
+                        .background(cardBg)
                         .cornerRadius(10)
                     }
 
@@ -161,7 +173,7 @@ struct IOSUdhaariContentView: View {
                         TextField("Search customers...", text: $searchQuery)
                     }
                     .padding(10)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(10)
 
                     // CUSTOMER LIST
@@ -323,14 +335,40 @@ struct IOSUdhaariCustomerCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 HStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(Color(red: 224/255, green: 242/255, blue: 254/255))
-                            .frame(width: 40, height: 40)
-                        Text(String(customer.name.prefix(2)).uppercased())
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(primaryBlue)
+                    if let photoStr = customer.photoUrl, let url = URL(string: photoStr) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(primaryBlue, lineWidth: 1.5))
+                            case .failure, .empty:
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(red: 224/255, green: 242/255, blue: 254/255))
+                                        .frame(width: 40, height: 40)
+                                    Text(String(customer.name.prefix(2)).uppercased())
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(primaryBlue)
+                                }
+                            @unknown default:
+                                Circle().fill(primaryBlue).frame(width: 40, height: 40)
+                            }
+                        }
+                    } else {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 224/255, green: 242/255, blue: 254/255))
+                                .frame(width: 40, height: 40)
+                            Text(String(customer.name.prefix(2)).uppercased())
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(primaryBlue)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -350,17 +388,6 @@ struct IOSUdhaariCustomerCard: View {
                 }
 
                 Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Outstanding")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(textMuted)
-                    Text(formatIndianCurrencySwift(customer.outstanding))
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(customer.outstanding >= 0 ? errorRed : successGreen)
-                }
             }
 
             HStack(spacing: 8) {
@@ -451,7 +478,7 @@ struct IOSUdhaariCustomerCard: View {
             }
         }
         .padding(14)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
     }

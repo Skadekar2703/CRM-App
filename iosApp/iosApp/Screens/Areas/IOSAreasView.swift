@@ -14,8 +14,22 @@ struct IOSAreasView: View {
 }
 
 struct IOSAreasContentView: View {
-    @State private var areas: [IOSArea] = []
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
+    private var bgApp: Color {
+        isDarkMode ? Color(red: 11/255, green: 18/255, blue: 32/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
+    }
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white
+    }
+    private var textPrimary: Color {
+        isDarkMode ? Color(red: 248/255, green: 250/255, blue: 252/255) : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+
+    @State private var areas: [IOSArea] = []
     @State private var searchQuery = ""
     @State private var selectedStatusFilter = "All"
     @State private var showFormSheet = false
@@ -56,17 +70,18 @@ struct IOSAreasContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(red: 248/255, green: 250/255, blue: 252/255).ignoresSafeArea()
+            bgApp.ignoresSafeArea()
 
             VStack(spacing: 12) {
                 // TOP SEARCH BAR
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
+                        .foregroundColor(textMuted)
                     TextField("Search areas...", text: $searchQuery)
+                        .foregroundColor(textPrimary)
                 }
                 .padding(10)
-                .background(Color.white)
+                .background(cardBg)
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -82,10 +97,10 @@ struct IOSAreasContentView: View {
                                     .fontWeight(isSelected ? .bold : .medium)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
-                                    .background(isSelected ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color.white)
-                                    .foregroundColor(isSelected ? .white : Color(red: 30/255, green: 41/255, blue: 59/255))
+                                    .background(isSelected ? Color.blue : cardBg)
+                                    .foregroundColor(isSelected ? .white : textPrimary)
                                     .cornerRadius(20)
-                                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(isSelected ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 203/255, green: 213/255, blue: 225/255), lineWidth: 1))
+                                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(isSelected ? Color.blue : textMuted.opacity(0.3), lineWidth: 1))
                             }
                         }
                     }
@@ -99,7 +114,7 @@ struct IOSAreasContentView: View {
                         .foregroundColor(Color.green)
                         .padding(10)
                         .frame(maxWidth: .infinity)
-                        .background(Color(red: 240/255, green: 253/255, blue: 244/255))
+                        .background(Color.green.opacity(0.15))
                         .cornerRadius(8)
                         .padding(.horizontal, 16)
                 }
@@ -148,8 +163,7 @@ struct IOSAreasContentView: View {
         }
         .sheet(isPresented: $showFormSheet) {
             IOSAreaFormSheet(
-                editingArea: editingArea,
-                onDismiss: { showFormSheet = false },
+                area: editingArea,
                 onSave: { name, status in
                     if let target = editingArea {
                         SupabaseIOSClient.shared.insertRecord(table: "areas", payload: ["id": target.id, "name": name]) { result in
@@ -217,6 +231,18 @@ struct IOSArea: Identifiable {
 }
 
 struct IOSAreaCard: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color {
+        isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white
+    }
+    private var textPrimary: Color {
+        isDarkMode ? Color(red: 248/255, green: 250/255, blue: 252/255) : Color(red: 30/255, green: 41/255, blue: 59/255)
+    }
+    private var textMuted: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+
     let area: IOSArea
     var onEdit: () -> Void
     var onDelete: () -> Void
@@ -228,10 +254,10 @@ struct IOSAreaCard: View {
                     Text(area.name)
                         .font(.headline)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                        .foregroundColor(textPrimary)
                     Text(area.id)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(textMuted)
                 }
 
                 Spacer()
@@ -251,13 +277,13 @@ struct IOSAreaCard: View {
             HStack {
                 Label("\(area.locationCount) Locations", systemImage: "mappin.circle.fill")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(textMuted)
 
                 Spacer()
 
                 Text("Added \(area.createdDate)")
                     .font(.caption2)
-                    .foregroundColor(.gray)
+                    .foregroundColor(textMuted)
 
                 HStack(spacing: 12) {
                     Button(action: onEdit) {
@@ -273,7 +299,7 @@ struct IOSAreaCard: View {
             }
         }
         .padding(14)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
     }

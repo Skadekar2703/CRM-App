@@ -26,6 +26,12 @@ struct IOSStockMovementItem: Identifiable {
 }
 
 struct IOSDaagContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
+    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
+
     @State private var movements: [IOSStockMovementItem] = []
 
     @State private var searchQuery = ""
@@ -118,7 +124,7 @@ struct IOSDaagContentView: View {
                         }
                     }
                     .padding(12)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(14)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
@@ -145,7 +151,7 @@ struct IOSDaagContentView: View {
                         }
                     }
                     .padding(12)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(14)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 }
@@ -159,7 +165,7 @@ struct IOSDaagContentView: View {
                     TextField("Search movements...", text: $searchQuery)
                 }
                 .padding(10)
-                .background(Color.white)
+                .background(cardBg)
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
 
@@ -397,34 +403,27 @@ struct IOSStockMovementCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil")
                             Text("Edit")
-                        }
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                        .cornerRadius(8)
+                        Image(systemName: "pencil")
+                            .font(.caption)
+                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                            .padding(6)
+                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .cornerRadius(6)
                     }
 
                     Button(action: onDelete) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash.fill")
-                            Text("Delete")
-                        }
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(8)
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .padding(6)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(6)
                     }
                 }
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
     }

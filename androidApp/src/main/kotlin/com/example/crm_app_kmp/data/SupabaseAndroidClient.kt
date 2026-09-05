@@ -4,12 +4,14 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.example.crm_app_kmp.BuildConfig
 import com.example.crm_app_kmp.auth.UserSession
+import com.example.crm_app_kmp.customers.CustomerDetailsModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
@@ -117,6 +119,106 @@ class SupabaseAndroidClient(context: Context) {
                 saveSession(session)
                 Result.success(session)
             }
+        } catch (e: Exception) {
+            Result.failure(Exception(mapException(e)))
+        }
+    }
+
+    suspend fun loginByUsername(
+        username: String,
+        password: String,
+        role: String = "ADMIN"
+    ): Result<UserSession> = withContext(Dispatchers.IO) {
+        try {
+            val cleanUsername = username.trim().lowercase()
+            var resolvedEmail = "$cleanUsername@business.crm"
+
+            try {
+                val rpcUrl = "$baseUrl/rest/v1/rpc/get_user_email_by_username"
+                val rpcPayload = JSONObject().apply {
+                    put("p_username", cleanUsername)
+                }
+                val rpcRequest = Request.Builder()
+                    .url(rpcUrl)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Content-Type", "application/json")
+                    .post(rpcPayload.toString().toRequestBody(jsonMediaType))
+                    .build()
+
+                httpClient.newCall(rpcRequest).execute().use { resp ->
+                    val body = resp.body?.string() ?: ""
+                    if (resp.isSuccessful) {
+                        val arr = JSONArray(body)
+                        if (arr.length() > 0) {
+                            val obj = arr.getJSONObject(0)
+                            resolvedEmail = obj.optString("email", resolvedEmail)
+                            val preRole = obj.optString("role", "").uppercase()
+                            val status = obj.optString("status", "Active")
+                            if (status.equals("Disabled", ignoreCase = true)) {
+                                return@withContext Result.failure(Exception("Your account has been disabled. Please contact your CRM Admin."))
+                            }
+                            if (preRole.isNotEmpty()) {
+                                if (role.uppercase() == "ADMIN" && preRole != "ADMIN") {
+                                    return@withContext Result.failure(Exception("This account is not an Admin account. Please use Staff Login."))
+                                }
+                                if (role.uppercase() == "STAFF" && preRole == "ADMIN") {
+                                    return@withContext Result.failure(Exception("This account is an Admin account. Please use Admin Login."))
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
+            val loginRes = login(resolvedEmail, password)
+            if (loginRes.isFailure) return@withContext loginRes
+
+            val session = loginRes.getOrNull() ?: return@withContext loginRes
+
+            // STRICT POST-AUTHENTICATION AUTHORIZATION VERIFICATION
+            try {
+                val memberUrl = "$baseUrl/rest/v1/business_members?id=eq.${session.id}&select=role,status,business_id"
+                val memberReq = Request.Builder()
+                    .url(memberUrl)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer ${session.accessToken}")
+                    .get()
+                    .build()
+
+                httpClient.newCall(memberReq).execute().use { resp ->
+                  val body = resp.body?.string() ?: ""
+                  if (resp.isSuccessful) {
+                      val arr = JSONArray(body)
+                      if (arr.length() > 0) {
+                          val obj = arr.getJSONObject(0)
+                          val realRole = obj.optString("role", "STAFF").uppercase()
+                          val realStatus = obj.optString("status", "Active")
+                          val businessId = obj.optString("business_id", "00000000-0000-0000-0000-000000000001")
+
+                          if (realStatus.equals("Disabled", ignoreCase = true)) {
+                              logout()
+                              return@withContext Result.failure(Exception("Your account has been disabled. Please contact your CRM Admin."))
+                          }
+
+                          if (role.uppercase() == "ADMIN" && realRole != "ADMIN") {
+                              logout()
+                              return@withContext Result.failure(Exception("This account is not an Admin account. Please use Staff Login."))
+                          }
+
+                          if (role.uppercase() == "STAFF" && realRole == "ADMIN") {
+                              logout()
+                              return@withContext Result.failure(Exception("This account is an ADMIN account. Please use Admin Login."))
+                          }
+
+                          val updatedSession = session.copy(role = realRole, businessId = businessId)
+                          saveSession(updatedSession)
+                          return@withContext Result.success(updatedSession)
+                      }
+                  }
+                }
+            } catch (_: Exception) {}
+
+            loginRes
         } catch (e: Exception) {
             Result.failure(Exception(mapException(e)))
         }
@@ -888,9 +990,92 @@ class SupabaseAndroidClient(context: Context) {
         }
     }
 
-    suspend fun fetchCustomers(): Result<List<com.example.crm_app_kmp.sales.CustomerModel>> = withContext(Dispatchers.IO) {
+    suspend fun getUserRole(): String = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl/rest/v1/customers?select=*&order=name.asc"
+            val token = getActiveToken()
+            if (token.isBlank()) return@withContext "STAFF"
+
+            val userReq = Request.Builder()
+                .url("$baseUrl/auth/v1/user")
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $token")
+                .get()
+                .build()
+
+            val userResp = httpClient.newCall(userReq).execute()
+            if (!userResp.isSuccessful) return@withContext "STAFF"
+
+            val userBody = userResp.body?.string() ?: ""
+            val userId = JSONObject(userBody).optString("id", "")
+            if (userId.isBlank()) return@withContext "STAFF"
+
+            val url = "$baseUrl/rest/v1/business_members?id=eq.$userId&select=role"
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $token")
+                .get()
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string() ?: ""
+                    val array = JSONArray(body)
+                    if (array.length() > 0) {
+                        return@withContext array.getJSONObject(0).optString("role", "STAFF").uppercase()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("USER_ROLE", "getUserRole error: ${e.message}")
+        }
+        return@withContext "STAFF"
+    }
+
+    fun fetchSignedStorageUrl(rawPath: String, accessToken: String = getActiveToken()): String {
+        try {
+            val cleanPath = rawPath.removePrefix("/").removePrefix("customer_photos/")
+            val signUrl = "$baseUrl/storage/v1/object/sign/customer_photos/$cleanPath"
+            val payload = JSONObject().apply {
+                put("expiresIn", 3600)
+            }
+            val request = Request.Builder()
+                .url(signUrl)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $accessToken")
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string() ?: ""
+                    val obj = JSONObject(body)
+                    val signedUrlPath = obj.optString("signedURL", "")
+                    if (signedUrlPath.isNotBlank()) {
+                        val finalSignedUrl = when {
+                            signedUrlPath.startsWith("http://") || signedUrlPath.startsWith("https://") -> signedUrlPath
+                            signedUrlPath.startsWith("/storage/v1") -> "$baseUrl$signedUrlPath"
+                            else -> "$baseUrl/storage/v1$signedUrlPath"
+                        }
+                        android.util.Log.d(
+                            "CUSTOMER_PHOTO_DEBUG",
+                            "Signed URL SUCCESS for customerId rawPath=$rawPath -> $finalSignedUrl"
+                        )
+                        return finalSignedUrl
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CUSTOMER_PHOTO_DEBUG", "fetchSignedStorageUrl error: ${e.message}")
+        }
+        val cleanPath = rawPath.removePrefix("/")
+        return "$baseUrl/storage/v1/object/public/customer_photos/$cleanPath"
+    }
+
+    suspend fun fetchCustomers(): Result<List<CustomerDetailsModel>> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/rest/v1/customers?select=*&order=created_at.desc"
             var activeToken = getActiveToken()
 
             var request = Request.Builder()
@@ -926,17 +1111,66 @@ class SupabaseAndroidClient(context: Context) {
                 }
 
                 val array = org.json.JSONArray(bodyString)
-                val list = mutableListOf<com.example.crm_app_kmp.sales.CustomerModel>()
+                val list = mutableListOf<CustomerDetailsModel>()
+
+                fun cleanOpt(c: org.json.JSONObject, key: String, fallback: String = ""): String {
+                    if (c.isNull(key)) return fallback
+                    val v = c.optString(key, fallback)
+                    if (v.equals("null", ignoreCase = true)) return fallback
+                    return v
+                }
 
                 for (i in 0 until array.length()) {
                     val c = array.getJSONObject(i)
+                    val rawBaki = c.optDouble("baki", 0.0)
+                    val jama = c.optDouble("jama", 0.0)
+                    val currentBaki = rawBaki - jama
+                    val cid = cleanOpt(c, "customer_id", "")
+                    val ccode = cleanOpt(c, "customer_code", "")
+                    val rawPhoto = cleanOpt(c, "photo_url", "").trim()
+                    val photo: String? = when {
+                        rawPhoto.isBlank() || rawPhoto.equals("null", ignoreCase = true) -> null
+                        rawPhoto.startsWith("http://") || rawPhoto.startsWith("https://") -> rawPhoto
+                        rawPhoto.startsWith("data:image") -> rawPhoto
+                        else -> fetchSignedStorageUrl(rawPhoto, activeToken)
+                    }
+
+                    val custName = cleanOpt(c, "name", "Customer")
+                    android.util.Log.d(
+                        "CUSTOMER_PHOTO_DEBUG",
+                        "Customer loaded: id=$cid, name=$custName, raw_photo_url='$rawPhoto', processed_photo_url='$photo'"
+                    )
+
                     list.add(
-                        com.example.crm_app_kmp.sales.CustomerModel(
-                            id = c.optString("id", ""),
-                            name = c.optString("name", ""),
-                            phone = c.optString("phone", ""),
-                            email = c.optString("email", ""),
-                            area = c.optString("area", "")
+                        CustomerDetailsModel(
+                            id = cleanOpt(c, "id", ""),
+                            customerId = if (cid.isBlank()) "${100001 + i}" else cid,
+                            customerCode = if (ccode.isBlank()) "Cd${(if (cid.isBlank()) "${100001 + i}" else cid).padStart(12, '0')}" else ccode,
+                            name = custName,
+                            mobile = cleanOpt(c, "phone", cleanOpt(c, "mobile", "")),
+                            alternateMobile = cleanOpt(c, "alternate_mobile", ""),
+                            email = cleanOpt(c, "email", ""),
+                            idCncNo = cleanOpt(c, "id_cnc_no", ""),
+                            photoUrl = photo,
+                            cibilStatus = cleanOpt(c, "cibil_status", "Good"),
+                            cibilScore = c.optInt("cibil_score", 750),
+                            category = cleanOpt(c, "category", "Customer"),
+                            categoryId = if (c.has("category_id") && !c.isNull("category_id")) c.getString("category_id") else null,
+                            creditLimit = c.optDouble("credit_limit", 50000.0),
+                            openingBalance = c.optDouble("opening_balance", 0.0),
+                            taxNo = cleanOpt(c, "tax_no", ""),
+                            udharWapisiDin = c.optInt("udhar_wapisi_din", 30),
+                            address = cleanOpt(c, "address", ""),
+                            area = cleanOpt(c, "area", "Local Market"),
+                            areaId = if (c.has("area_id") && !c.isNull("area_id")) c.getString("area_id") else null,
+                            remark = cleanOpt(c, "remark", ""),
+                            guarantorName = cleanOpt(c, "guarantor_name", ""),
+                            guarantorMobile = cleanOpt(c, "guarantor_mobile", ""),
+                            baki = currentBaki,
+                            jama = jama,
+                            lastTxnDate = cleanOpt(c, "updated_at", "Recent"),
+                            status = cleanOpt(c, "status", "Active"),
+                            creditBlocked = c.optBoolean("credit_blocked", false)
                         )
                     )
                 }
@@ -948,48 +1182,282 @@ class SupabaseAndroidClient(context: Context) {
         }
     }
 
+    suspend fun generateNextCustomerId(): String = withContext(Dispatchers.IO) {
+        try {
+            val bizId = prefs.getString("business_id", "00000000-0000-0000-0000-000000000001") ?: "00000000-0000-0000-0000-000000000001"
+            val url = "$baseUrl/rest/v1/rpc/generate_next_customer_id"
+            val payload = JSONObject().apply { put("p_business_id", bizId) }
+            var activeToken = getActiveToken()
+
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (resp.isSuccessful) {
+                    val clean = body.trim().replace("\"", "")
+                    if (clean.matches(Regex("^[0-9]{6}$"))) return@withContext clean
+                }
+            }
+        } catch (_: Exception) {}
+        return@withContext "100001"
+    }
+
     suspend fun addCustomer(
+        customerId: String,
+        customerCode: String,
         name: String,
-        phone: String = "",
+        mobile: String,
+        alternateMobile: String = "",
         email: String = "",
-        area: String = ""
-    ): Result<com.example.crm_app_kmp.sales.CustomerModel> = withContext(Dispatchers.IO) {
-        val payload = JSONObject().apply {
-            put("name", name.trim())
-            put("phone", phone.trim())
-            put("email", email.trim())
-            put("area", area.trim())
-        }
-        insertRecord("customers", payload).map { obj ->
-            com.example.crm_app_kmp.sales.CustomerModel(
-                id = obj.optString("id", ""),
-                name = obj.optString("name", name),
-                phone = obj.optString("phone", phone),
-                email = obj.optString("email", email),
-                area = obj.optString("area", area)
-            )
+        idCncNo: String = "",
+        photoUrl: String? = null,
+        cibilStatus: String = "Good",
+        cibilScore: Int = 750,
+        category: String = "Customer",
+        categoryId: String? = null,
+        creditLimit: Double = 50000.0,
+        openingBalance: Double = 0.0,
+        taxNo: String = "",
+        udharWapisiDin: Int = 30,
+        address: String = "",
+        area: String = "",
+        areaId: String? = null,
+        remark: String = "",
+        guarantorName: String = "",
+        guarantorMobile: String = "",
+        status: String = "Active",
+        creditBlocked: Boolean = false
+    ): Result<CustomerDetailsModel> = withContext(Dispatchers.IO) {
+        try {
+            val defaultBusinessId = prefs.getString("business_id", "00000000-0000-0000-0000-000000000001") ?: "00000000-0000-0000-0000-000000000001"
+            val rpcUrl = "$baseUrl/rest/v1/rpc/create_customer_v2"
+            val payload = JSONObject().apply {
+                put("p_business_id", defaultBusinessId)
+                put("p_customer_code", customerCode.trim())
+                put("p_name", name.trim())
+                put("p_phone", mobile.trim())
+                put("p_alternate_mobile", alternateMobile.trim())
+                put("p_email", email.trim())
+                put("p_id_cnc_no", idCncNo.trim())
+                if (!photoUrl.isNullOrBlank()) put("p_photo_url", photoUrl.trim())
+                put("p_cibil_status", cibilStatus.trim())
+                put("p_cibil_score", cibilScore)
+                put("p_category", category.trim())
+                put("p_credit_limit", creditLimit)
+                put("p_opening_balance", openingBalance)
+                put("p_tax_no", taxNo.trim())
+                put("p_udhar_wapisi_din", udharWapisiDin)
+                put("p_address", address.trim())
+                put("p_area", area.trim().ifBlank { "Local Market" })
+                put("p_remark", remark.trim())
+                put("p_guarantor_name", guarantorName.trim())
+                put("p_guarantor_mobile", guarantorMobile.trim())
+                put("p_status", status.trim())
+                put("p_credit_blocked", creditBlocked)
+            }
+
+            var activeToken = getActiveToken()
+            val request = Request.Builder()
+                .url(rpcUrl)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    val err = parseError(body, resp.code)
+                    return@withContext Result.failure(Exception(err))
+                }
+
+                val resObj = JSONObject(body)
+                val newId = resObj.optString("id", "")
+                if (newId.isNotBlank() && (!areaId.isNullOrBlank() || !categoryId.isNullOrBlank())) {
+                    val patchPayload = JSONObject().apply {
+                        if (!areaId.isNullOrBlank()) put("area_id", areaId)
+                        if (!categoryId.isNullOrBlank()) put("category_id", categoryId)
+                    }
+                    updateRecord("customers", newId, patchPayload)
+                }
+
+                Result.success(
+                    CustomerDetailsModel(
+                        id = newId,
+                        customerId = customerId,
+                        customerCode = customerCode,
+                        name = name,
+                        mobile = mobile,
+                        alternateMobile = alternateMobile,
+                        email = email,
+                        idCncNo = idCncNo,
+                        photoUrl = photoUrl,
+                        cibilStatus = cibilStatus,
+                        cibilScore = cibilScore,
+                        category = category,
+                        categoryId = categoryId,
+                        creditLimit = creditLimit,
+                        openingBalance = openingBalance,
+                        taxNo = taxNo,
+                        udharWapisiDin = udharWapisiDin,
+                        address = address,
+                        area = area,
+                        areaId = areaId,
+                        remark = remark,
+                        guarantorName = guarantorName,
+                        guarantorMobile = guarantorMobile,
+                        status = status,
+                        creditBlocked = creditBlocked,
+                        baki = openingBalance,
+                        jama = 0.0
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(mapException(e)))
         }
     }
 
     suspend fun updateCustomer(
         id: String,
+        customerCode: String,
         name: String,
-        phone: String = "",
+        mobile: String,
+        alternateMobile: String = "",
         email: String = "",
-        area: String = ""
+        idCncNo: String = "",
+        photoUrl: String? = null,
+        cibilStatus: String = "Good",
+        cibilScore: Int = 750,
+        category: String = "Customer",
+        categoryId: String? = null,
+        creditLimit: Double = 50000.0,
+        openingBalance: Double = 0.0,
+        taxNo: String = "",
+        udharWapisiDin: Int = 30,
+        address: String = "",
+        area: String = "",
+        areaId: String? = null,
+        remark: String = "",
+        guarantorName: String = "",
+        guarantorMobile: String = "",
+        status: String = "Active",
+        creditBlocked: Boolean = false
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val payload = JSONObject().apply {
             put("name", name.trim())
-            put("phone", phone.trim())
+            put("phone", mobile.trim())
+            put("alternate_mobile", alternateMobile.trim())
             put("email", email.trim())
-            put("area", area.trim())
-            put("updated_at", "now()")
+            put("id_cnc_no", idCncNo.trim())
+            put("customer_code", customerCode.trim())
+            if (!photoUrl.isNullOrBlank()) put("photo_url", photoUrl.trim())
+            put("cibil_status", cibilStatus.trim())
+            put("cibil_score", cibilScore)
+            put("category", category.trim())
+            if (!categoryId.isNullOrBlank()) put("category_id", categoryId) else put("category_id", JSONObject.NULL)
+            put("credit_limit", creditLimit)
+            put("opening_balance", openingBalance)
+            put("tax_no", taxNo.trim())
+            put("udhar_wapisi_din", udharWapisiDin)
+            put("address", address.trim())
+            put("area", area.trim().ifBlank { "Local Market" })
+            if (!areaId.isNullOrBlank()) put("area_id", areaId) else put("area_id", JSONObject.NULL)
+            put("remark", remark.trim())
+            put("guarantor_name", guarantorName.trim())
+            put("guarantor_mobile", guarantorMobile.trim())
+            put("status", status.trim())
+            put("credit_blocked", creditBlocked)
+            put("updated_at", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(java.util.Date()))
         }
         updateRecord("customers", id, payload)
     }
 
+    suspend fun addUdhaariTransactionRpc(
+        customerId: String,
+        type: String, // "Baki" or "Jama"
+        amount: Double,
+        notes: String = ""
+    ): Result<JSONObject> = withContext(Dispatchers.IO) {
+        try {
+            val rpcUrl = "$baseUrl/rest/v1/rpc/add_udhaari_transaction"
+            val payload = JSONObject().apply {
+                put("p_customer_id", customerId)
+                put("p_type", type)
+                put("p_amount", amount)
+                put("p_notes", notes)
+            }
+            var activeToken = prefs.getString("access_token", "") ?: ""
+            val request = Request.Builder()
+                .url(rpcUrl)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    val err = parseError(body, resp.code)
+                    return@withContext Result.failure(Exception(err))
+                }
+                Result.success(JSONObject(body))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(mapException(e)))
+        }
+    }
+
     suspend fun deleteCustomer(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         deleteRecord("customers", id)
+    }
+
+    suspend fun fetchCustomerTransactions(customerId: String): Result<List<com.example.crm_app_kmp.customers.CustomerTxn>> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/rest/v1/udhaari?customer_id=eq.$customerId&order=date.desc"
+            var activeToken = getActiveToken()
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .get()
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    return@withContext Result.failure(Exception(parseError(body, resp.code)))
+                }
+                val array = JSONArray(body)
+                val list = mutableListOf<com.example.crm_app_kmp.customers.CustomerTxn>()
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val rawDate = obj.optString("date", obj.optString("created_at", ""))
+                    val formattedDate = if (rawDate.length >= 10) rawDate.substring(0, 10) else rawDate
+                    list.add(
+                        com.example.crm_app_kmp.customers.CustomerTxn(
+                            id = obj.optString("id", ""),
+                            date = formattedDate,
+                            type = obj.optString("type", "Baki"),
+                            amount = obj.optDouble("amount", 0.0),
+                            notes = obj.optString("notes", ""),
+                            runningBalance = 0.0
+                        )
+                    )
+                }
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(mapException(e)))
+        }
     }
 
     // ==========================================
@@ -1324,6 +1792,10 @@ class SupabaseAndroidClient(context: Context) {
             val json = JSONObject(bodyString)
             val msg = json.optString("msg", json.optString("error_description", json.optString("message", json.optString("hint", ""))))
             when {
+                msg.contains("idx_customers_business_phone", ignoreCase = true) || msg.contains("customers_phone_key", ignoreCase = true) ->
+                    "This mobile number is already registered."
+                msg.contains("idx_customers_business_customer_code", ignoreCase = true) || msg.contains("customer_code", ignoreCase = true) ->
+                    "This CD Code is already registered."
                 msg.contains("Insufficient stock", ignoreCase = true) -> msg
                 msg.contains("invalid", ignoreCase = true) || msg.contains("credentials", ignoreCase = true) ->
                     "Invalid email or password. Please try again."
@@ -1345,6 +1817,114 @@ class SupabaseAndroidClient(context: Context) {
                 403 -> "Permission denied (403). You do not have authorization for this action."
                 else -> "Operation failed (HTTP $statusCode). Please try again."
             }
+        }
+    }
+
+    suspend fun fetchBusinessMembers(): Result<List<com.example.crm_app_kmp.users.UserModel>> = withContext(Dispatchers.IO) {
+        try {
+            val session = restoreSession() ?: return@withContext Result.failure(Exception("Authentication session expired. Please log in again."))
+            val url = "$baseUrl/rest/v1/business_members?select=id,username,role,status,created_at&order=created_at.asc"
+            val req = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer ${session.accessToken}")
+                .get()
+                .build()
+
+            httpClient.newCall(req).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    return@withContext Result.failure(Exception(parseError(body, resp.code)))
+                }
+                val jsonArr = JSONArray(body)
+                val members = mutableListOf<com.example.crm_app_kmp.users.UserModel>()
+                for (i in 0 until jsonArr.length()) {
+                    val obj = jsonArr.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val username = obj.optString("username", "User")
+                    val role = obj.optString("role", "STAFF").uppercase()
+                    val status = obj.optString("status", "Active")
+                    val createdAtRaw = obj.optString("created_at", "")
+                    val createdAt = if (createdAtRaw.length >= 10) createdAtRaw.substring(0, 10) else "02 Sep 2026"
+                    members.add(
+                        com.example.crm_app_kmp.users.UserModel(
+                            id = id,
+                            username = username,
+                            email = "$username@business.crm",
+                            role = if (role == "ADMIN") "ADMIN" else "STAFF",
+                            status = if (status.equals("Disabled", ignoreCase = true)) "Disabled" else "Active",
+                            createdAt = createdAt
+                        )
+                    )
+                }
+                Result.success(members)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun changeStaffPassword(targetUserId: String, newPassword: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val session = restoreSession() ?: return@withContext Result.failure(Exception("Authentication session expired. Please log in again."))
+            val url = "$baseUrl/functions/v1/manage-staff"
+            val payload = JSONObject().apply {
+                put("action", "CHANGE_PASSWORD")
+                put("userId", targetUserId)
+                put("password", newPassword.trim())
+            }
+            val req = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer ${session.accessToken}")
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(req).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                val jsonObj = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+                if (!resp.isSuccessful || jsonObj.has("error")) {
+                    val err = jsonObj.optString("error", parseError(body, resp.code))
+                    return@withContext Result.failure(Exception(err))
+                }
+                val msg = jsonObj.optString("message", "Staff password changed successfully.")
+                Result.success(msg)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun toggleStaffStatus(targetUserId: String, newStatus: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val session = restoreSession() ?: return@withContext Result.failure(Exception("Authentication session expired. Please log in again."))
+            val url = "$baseUrl/functions/v1/manage-staff"
+            val payload = JSONObject().apply {
+                put("action", "TOGGLE_STATUS")
+                put("userId", targetUserId)
+                put("status", newStatus)
+            }
+            val req = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer ${session.accessToken}")
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(req).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                val jsonObj = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+                if (!resp.isSuccessful || jsonObj.has("error")) {
+                    val err = jsonObj.optString("error", parseError(body, resp.code))
+                    return@withContext Result.failure(Exception(err))
+                }
+                val msg = jsonObj.optString("message", "Staff status updated successfully.")
+                Result.success(msg)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

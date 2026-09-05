@@ -5,7 +5,7 @@
   width: 100%;
 }
 
-/* PAGE HEADER (REF 2) */
+/* PAGE HEADER */
 .udhaari-page-header {
   display: flex;
   align-items: center;
@@ -17,14 +17,14 @@
 .udhaari-title-text {
   font-size: 26px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.02em;
 }
 
 .udhaari-subtitle-text {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -36,9 +36,9 @@
 
 .btn-secondary-udhaari {
   padding: 9px 18px;
-  background-color: #f1f5f9;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
@@ -50,13 +50,13 @@
 }
 
 .btn-secondary-udhaari:hover {
-  background-color: #e2e8f0;
-  color: #0f172a;
+  background-color: var(--border-color);
+  color: var(--text-primary);
 }
 
 .btn-primary-udhaari {
   padding: 9px 18px;
-  background-color: #0284c7;
+  background-color: var(--color-primary);
   color: #ffffff;
   border: none;
   border-radius: 8px;
@@ -71,19 +71,20 @@
 }
 
 .btn-primary-udhaari:hover {
-  background-color: #0369a1;
+  opacity: 0.9;
 }
 
-/* SUMMARY CARDS (REF 2) */
-.udhaari-summary-cards {
+/* SUMMARY CARDS */
+.udhaari-summary-cards,
+.udhaari-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
 
 .summary-card-udhaari {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 14px;
   padding: 20px 24px;
   display: flex;
@@ -91,7 +92,7 @@
   justify-content: space-between;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 .summary-card-udhaari.red-accent::before {
@@ -101,7 +102,7 @@
   top: 0;
   bottom: 0;
   width: 4px;
-  background-color: #dc2626;
+  background-color: var(--color-baki);
 }
 
 .summary-card-udhaari.blue-accent::before {
@@ -111,26 +112,48 @@
   top: 0;
   bottom: 0;
   width: 4px;
-  background-color: #0284c7;
+  background-color: var(--color-primary);
 }
 
-.summary-card-label {
+.summary-card-label,
+.udhaari-stat-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #64748b;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
-.summary-card-value {
+.summary-card-value,
+.udhaari-stat-value {
   font-size: 26px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-primary);
   margin-top: 6px;
 }
 
-.summary-card-value.red-text {
-  color: #dc2626;
+.summary-card-value.red-text,
+.udhaari-stat-value.text-red,
+.text-red {
+  color: var(--color-baki) !important;
+}
+
+.summary-card-value.green-text,
+.udhaari-stat-value.text-green,
+.text-green {
+  color: var(--color-jama) !important;
+}
+
+.summary-card-value.blue-text,
+.udhaari-stat-value.text-blue,
+.text-blue {
+  color: var(--color-primary) !important;
+}
+
+.summary-card-value.amber-text,
+.udhaari-stat-value.text-amber,
+.text-amber {
+  color: #f97316 !important;
 }
 
 .summary-icon-box {
@@ -143,30 +166,31 @@
 }
 
 .summary-icon-box.red-bg {
-  background-color: #fef2f2;
-  color: #dc2626;
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-baki);
 }
 
 .summary-icon-box.green-bg {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background-color: rgba(34, 197, 94, 0.15);
+  color: var(--color-jama);
 }
 
 .summary-icon-box.blue-bg {
-  background-color: #eff6ff;
-  color: #0284c7;
+  background-color: rgba(37, 99, 235, 0.15);
+  color: var(--color-primary);
 }
 
-/* MAIN CARD BOX & TOOLBAR (REF 2) */
+/* MAIN CARD BOX & TOOLBAR */
 .udhaari-card-box {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 4px var(--shadow-color);
+  color: var(--text-primary);
 }
 
 .udhaari-filter-toolbar {
@@ -186,23 +210,25 @@
 
 .udhaari-select {
   padding: 8px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 13px;
-  color: #334155;
-  background-color: #ffffff;
+  color: var(--text-primary);
+  background-color: var(--bg-input);
   outline: none;
   font-weight: 500;
 }
 
 .udhaari-select:focus {
-  border-color: #0284c7;
+  border-color: var(--color-primary);
 }
 
-/* DESKTOP TABLE (REF 2) */
+/* DESKTOP TABLE */
 .udhaari-table {
   width: 100%;
   border-collapse: collapse;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .udhaari-table th {
@@ -210,10 +236,11 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #ffffff;
-  background-color: #0f172a;
+  color: var(--text-muted);
+  background-color: var(--bg-surface-secondary);
   padding: 14px 16px;
   text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .udhaari-table th:first-child {
@@ -227,8 +254,8 @@
 .udhaari-table td {
   padding: 16px;
   font-size: 14px;
-  color: #0f172a;
-  border-bottom: 1px solid #f1f5f9;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
 }
 
@@ -243,7 +270,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: #0284c7;
+  background-color: var(--color-primary);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -253,17 +280,17 @@
 }
 
 .customer-initial-avatar.green {
-  background-color: #16a34a;
+  background-color: var(--color-jama);
 }
 
 .customer-initial-avatar.blue-light {
-  background-color: #bae6fd;
-  color: #0369a1;
+  background-color: rgba(37, 99, 235, 0.15);
+  color: var(--color-primary);
 }
 
 .customer-initial-avatar.green-light {
-  background-color: #dcfce7;
-  color: #15803d;
+  background-color: rgba(34, 197, 94, 0.15);
+  color: var(--color-jama);
 }
 
 /* CIBIL PILL BADGES */
@@ -276,31 +303,31 @@
 }
 
 .cibil-pill.bad {
-  background-color: #fef2f2;
-  color: #dc2626;
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-baki);
 }
 
 .cibil-pill.good {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background-color: rgba(34, 197, 94, 0.15);
+  color: var(--color-jama);
 }
 
 .cibil-pill.average {
-  background-color: #ffedd5;
-  color: #c2410c;
+  background-color: rgba(249, 115, 22, 0.15);
+  color: #f97316;
 }
 
 .balance-red-text {
   font-weight: 700;
-  color: #dc2626;
+  color: var(--color-baki);
 }
 
 .balance-green-text {
   font-weight: 700;
-  color: #16a34a;
+  color: var(--color-jama);
 }
 
-/* MOBILE CARDS (MATCHING REF 1 SCREENSHOT) */
+/* MOBILE CARDS */
 .mobile-udhaari-list {
   display: none;
   flex-direction: column;
@@ -308,23 +335,23 @@
 }
 
 .mobile-summary-cards {
-  display: flex;
+  display: none;
   gap: 12px;
 }
 
 .mobile-summary-card {
   flex: 1;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 .mobile-summary-label {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -334,17 +361,18 @@
   font-size: 20px;
   font-weight: 800;
   margin-top: 6px;
+  color: var(--text-primary);
 }
 
 .mobile-customer-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 .mobile-card-top-row {
@@ -371,24 +399,24 @@
 }
 
 .mobile-avatar-circle.blue-bg {
-  background-color: #e0f2fe;
-  color: #0369a1;
+  background-color: rgba(37, 99, 235, 0.15);
+  color: var(--color-primary);
 }
 
 .mobile-avatar-circle.green-bg {
-  background-color: #dcfce7;
-  color: #15803d;
+  background-color: rgba(34, 197, 94, 0.15);
+  color: var(--color-jama);
 }
 
 .mobile-customer-name {
   font-size: 17px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .mobile-customer-area {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -402,18 +430,18 @@
 .mobile-card-balance-text {
   font-size: 16px;
   font-weight: 800;
-  color: #dc2626;
+  color: var(--color-baki);
 }
 
 .mobile-card-date-text {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
 .mobile-card-divider {
   height: 1px;
-  background-color: #f1f5f9;
+  background-color: var(--border-color);
   margin: 2px 0;
 }
 
@@ -428,7 +456,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
   font-weight: 600;
 }
 
@@ -442,9 +470,9 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  border: none;
-  background-color: #f1f5f9;
-  color: #334155;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -453,13 +481,15 @@
 }
 
 .circle-action-btn.red-bg {
-  background-color: #fef2f2;
-  color: #dc2626;
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-baki);
+  border-color: var(--color-baki);
 }
 
 .circle-action-btn.blue-bg {
-  background-color: #eff6ff;
-  color: #0284c7;
+  background-color: rgba(37, 99, 235, 0.15);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 @media (max-width: 768px) {
@@ -468,7 +498,8 @@
   .udhaari-summary-cards {
     display: none;
   }
-  .mobile-udhaari-list {
+  .mobile-udhaari-list,
+  .mobile-summary-cards {
     display: flex;
   }
 }

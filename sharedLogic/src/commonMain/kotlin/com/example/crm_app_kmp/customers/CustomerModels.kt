@@ -8,206 +8,121 @@ data class CustomerTxn(
     val date: String,
     val type: String, // "Baki", "Jama", "Invoice"
     val amount: Double,
-    val notes: String
+    val notes: String,
+    val runningBalance: Double = 0.0
 ) {
     val amountFormatted: String get() = "₹${amount.toInt()}"
+    val runningBalanceFormatted: String get() = "₹${runningBalance.toInt()}"
 }
 
 @JsExport
 data class CustomerDetailsModel(
-    val id: String,              // e.g. "CUS-32"
-    val name: String,            // e.g. "Lokesh"
-    val area: String,            // e.g. "Jeeva Nagar, Madurai"
-    val mobile: String,          // e.g. "9087563412"
-    val category: String,        // e.g. "Regular", "VIP", "Wholesale"
-    val cibilScore: Int,         // e.g. 850
-    val cibilStatus: String,     // e.g. "Normal", "Good", "Warning", "Bad"
-    val creditLimit: Double,     // e.g. 100000.0 (Dis. Amount / Limit)
-    val currentBalance: Double,  // e.g. 85000.0
-    val balanceType: String,     // "Baki" or "Jama"
-    val status: String,          // "Active", "Inactive"
-    val transactions: List<CustomerTxn> = emptyList(),
-    val baakiAmount: Double = if (balanceType.equals("Baki", ignoreCase = true)) currentBalance else 0.0,
-    val jamaAmount: Double = if (balanceType.equals("Jama", ignoreCase = true)) currentBalance else 0.0
+    val id: String,                  // UUID
+    val customerId: String,          // 6-digit numeric ID e.g. "100001"
+    val customerCode: String,        // Format: Cd + 12 digits e.g. "Cd123456789012"
+    val name: String,                // Full Name
+    val mobile: String,              // 10 digits
+    val alternateMobile: String = "",// Alternate Mobile
+    val email: String = "",          // Email
+    val idCncNo: String = "",        // ID / CNC Number
+    val photoUrl: String? = null,    // Storage URL / Reference
+    val cibilStatus: String = "Good",// "Good", "Medium", "Low", "Bad"
+    val cibilScore: Int = 750,       // CIBIL Numeric Score
+    val category: String = "Customer",// "Retailer", "Customer", "Wholesaler"
+    val categoryId: String? = null,  // FK to public.categories.id
+    val creditLimit: Double = 50000.0,// Credit Limit (max allowable Baki)
+    val openingBalance: Double = 0.0,// Account Opening Balance
+    val taxNo: String = "",          // Tax Number
+    val udharWapisiDin: Int = 30,    // Credit Return Days
+    val address: String = "",        // Full Address
+    val area: String = "Local Market",// Area name
+    val areaId: String? = null,      // FK to public.areas.id
+    val remark: String = "",         // Remark / Description
+    val guarantorName: String = "",  // Guarantor Name
+    val guarantorMobile: String = "",// Guarantor Mobile
+    val baki: Double = 0.0,          // Baki / Debit balance
+    val jama: Double = 0.0,          // Jama / Credit balance
+    val lastTxnDate: String = "Recent",// Last transaction date
+    val status: String = "Active",   // "Active" / "Inactive"
+    val creditBlocked: Boolean = false, // Credit Blocked flag
+    val transactions: List<CustomerTxn> = emptyList()
 ) {
-    val creditLimitFormatted: String get() = "₹${creditLimit.toInt()}"
-    val currentBalanceFormatted: String get() = "₹${currentBalance.toInt()}"
-    val baakiFormatted: String get() = "₹${baakiAmount.toInt()}"
-    val jamaFormatted: String get() = "₹${jamaAmount.toInt()}"
-    val isBadOrOverdue: Boolean get() = cibilStatus.equals("Bad", ignoreCase = true) || cibilStatus.equals("Warning", ignoreCase = true) || cibilScore < 650
+    val outstanding: Double get() = baki - jama
+    val outstandingFormatted: String get() = "₹${outstanding.toInt()}"
+    val bakiFormatted: String get() = "₹${baki.toInt()}"
+    val jamaFormatted: String get() = "₹${jama.toInt()}"
+    val isRiskOrBad: Boolean get() = cibilStatus.equals("Bad", ignoreCase = true) || cibilStatus.equals("Low", ignoreCase = true)
+
+    val cibilDotColor: String get() = when (cibilStatus.lowercase()) {
+        "bad" -> "#EF4444"      // Red
+        "low" -> "#F97316"      // Orange
+        "medium", "average" -> "#EAB308" // Yellow
+        else -> "#22C55E"       // Green
+    }
 }
 
 @JsExport
-object CustomerRepository {
-    private val initialCustomers = mutableListOf<CustomerDetailsModel>()
-
-    fun getCustomers(): List<CustomerDetailsModel> = initialCustomers.toList()
-
-    fun getTotalCustomers(): Int = initialCustomers.size
-
-    fun getActiveCustomers(): Int = initialCustomers.count { it.status.equals("Active", ignoreCase = true) }
-
-    fun getTotalBaki(): Double = initialCustomers
-        .filter { it.balanceType.equals("Baki", ignoreCase = true) && it.status.equals("Active", ignoreCase = true) }
-        .sumOf { it.currentBalance }
-
-    fun filterCustomers(
-        query: String = "",
-        areaFilter: String = "All",
-        categoryFilter: String = "All",
-        cibilFilter: String = "All",
-        statusFilter: String = "All"
-    ): List<CustomerDetailsModel> {
-        val q = query.lowercase().trim()
-        return initialCustomers.filter { c ->
-            val matchesQuery = q.isEmpty() ||
-                    c.id.lowercase().contains(q) ||
-                    c.name.lowercase().contains(q) ||
-                    c.mobile.lowercase().contains(q) ||
-                    c.area.lowercase().contains(q)
-
-            val matchesArea = areaFilter.equals("All", ignoreCase = true) || c.area.equals(areaFilter, ignoreCase = true)
-            val matchesCat = categoryFilter.equals("All", ignoreCase = true) || c.category.equals(categoryFilter, ignoreCase = true)
-
-            val matchesCibil = when {
-                cibilFilter.equals("All", ignoreCase = true) -> true
-                cibilFilter.equals("Good", ignoreCase = true) || cibilFilter.contains("Good", ignoreCase = true) -> c.cibilScore >= 750
-                cibilFilter.equals("Average", ignoreCase = true) || cibilFilter.contains("Average", ignoreCase = true) -> c.cibilScore in 650..749
-                cibilFilter.equals("Warning", ignoreCase = true) || cibilFilter.contains("Risk", ignoreCase = true) || cibilFilter.contains("Bad", ignoreCase = true) -> c.cibilScore < 650
-                else -> c.cibilStatus.equals(cibilFilter, ignoreCase = true)
-            }
-
-            val matchesStatus = when {
-                statusFilter.equals("All", ignoreCase = true) -> true
-                statusFilter.equals("Active", ignoreCase = true) -> c.status.equals("Active", ignoreCase = true)
-                statusFilter.equals("Inactive", ignoreCase = true) -> c.status.equals("Inactive", ignoreCase = true)
-                statusFilter.equals("Warning", ignoreCase = true) || statusFilter.equals("Bad", ignoreCase = true) -> c.isBadOrOverdue
-                else -> c.status.equals(statusFilter, ignoreCase = true)
-            }
-
-            matchesQuery && matchesArea && matchesCat && matchesCibil && matchesStatus
-        }
-    }
-
-    fun addCustomer(
-        name: String,
-        mobile: String,
-        area: String,
-        category: String,
-        cibilScore: Int,
-        cibilStatus: String,
-        creditLimit: Double,
-        initialBalance: Double,
-        balanceType: String
-    ): CustomerDetailsModel {
-        val nextId = "CUS-${35 + initialCustomers.size}"
-        val newC = CustomerDetailsModel(
-            id = nextId,
-            name = name,
-            area = area.ifBlank { "General Area" },
-            mobile = mobile,
-            category = category.ifBlank { "Regular" },
-            cibilScore = if (cibilScore <= 0) 750 else cibilScore,
-            cibilStatus = cibilStatus.ifBlank { if (cibilScore < 650) "Bad" else "Normal" },
-            creditLimit = creditLimit,
-            currentBalance = initialBalance,
-            balanceType = balanceType.ifBlank { "Baki" },
-            status = "Active",
-            transactions = if (initialBalance > 0) listOf(
-                CustomerTxn("TX-${600 + initialCustomers.size}", "Today", balanceType, initialBalance, "Initial Balance")
-            ) else emptyList()
-        )
-        initialCustomers.add(0, newC)
-        return newC
-    }
-
-    fun updateCustomer(
-        id: String,
-        name: String,
-        mobile: String,
-        area: String,
-        category: String,
-        cibilScore: Int,
-        cibilStatus: String,
-        creditLimit: Double,
-        status: String
-    ): CustomerDetailsModel? {
-        val idx = initialCustomers.indexOfFirst { it.id == id }
-        if (idx >= 0) {
-            val existing = initialCustomers[idx]
-            val updated = existing.copy(
-                name = name,
-                mobile = mobile,
-                area = area,
-                category = category,
-                cibilScore = cibilScore,
-                cibilStatus = cibilStatus,
-                creditLimit = creditLimit,
-                status = status
-            )
-            initialCustomers[idx] = updated
-            return updated
+object CustomerValidator {
+    fun validateCategory(category: String?): String? {
+        if (category.isNullOrBlank() || category.trim().equals("Select Category", ignoreCase = true)) {
+            return "Please select a customer category."
         }
         return null
     }
 
-    fun deleteCustomer(id: String): Boolean {
-        return initialCustomers.removeAll { it.id == id }
+    fun validateName(name: String): String? {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return "Customer name is required."
+        return null
     }
 
-    fun addTransaction(
-        customerId: String,
-        type: String, // "Baki" or "Jama"
-        amount: Double,
-        notes: String
-    ): Boolean {
-        val idx = initialCustomers.indexOfFirst { it.id == customerId }
-        if (idx >= 0 && amount > 0) {
-            val customer = initialCustomers[idx]
-            var currentBal = customer.currentBalance
-            var currentType = customer.balanceType
+    fun validateMobile(mobile: String): String? {
+        val trimmed = mobile.trim()
+        if (trimmed.isBlank()) return "Mobile number is required."
+        if (!trimmed.matches(Regex("^[0-9]{10}$"))) return "Mobile number must be exactly 10 numeric digits."
+        return null
+    }
 
-            if (type.equals("Baki", ignoreCase = true)) {
-                if (currentType.equals("Baki", ignoreCase = true)) {
-                    currentBal += amount
-                } else {
-                    if (amount >= currentBal) {
-                        currentBal = amount - currentBal
-                        currentType = "Baki"
-                    } else {
-                        currentBal -= amount
-                    }
-                }
-            } else {
-                // Jama (Payment Received)
-                if (currentType.equals("Baki", ignoreCase = true)) {
-                    if (amount >= currentBal) {
-                        currentBal = amount - currentBal
-                        currentType = "Jama"
-                    } else {
-                        currentBal -= amount
-                    }
-                } else {
-                    currentBal += amount
-                }
-            }
+    fun validateCustomerCode(code: String): String? {
+        val trimmed = code.trim()
+        if (trimmed.isBlank()) return "CD Code is required."
+        return null
+    }
 
-            val newTx = CustomerTxn(
-                id = "TX-${700 + customer.transactions.size + 1}",
-                date = "Today",
-                type = type,
-                amount = amount,
-                notes = notes.ifBlank { if (type == "Jama") "Payment Received" else "Credit Added" }
-            )
-
-            val updated = customer.copy(
-                currentBalance = currentBal,
-                balanceType = currentType,
-                transactions = listOf(newTx) + customer.transactions
-            )
-            initialCustomers[idx] = updated
-            return true
+    fun validateGuarantorMobile(mobile: String): String? {
+        val trimmed = mobile.trim()
+        if (trimmed.isNotEmpty() && !trimmed.matches(Regex("^[0-9]{10}$"))) {
+            return "Guarantor mobile number must be exactly 10 numeric digits."
         }
-        return false
+        return null
+    }
+
+    fun validateCreditLimit(creditLimit: Double): String? {
+        if (creditLimit < 0) return "Credit Limit cannot be negative."
+        return null
+    }
+
+    fun validateBakiTransaction(
+        currentOutstanding: Double,
+        newBakiAmount: Double,
+        creditLimit: Double,
+        isCreditBlocked: Boolean
+    ): String? {
+        if (isCreditBlocked) {
+            return "Credit is blocked for this customer."
+        }
+        val projectedOutstanding = currentOutstanding + newBakiAmount
+        if (projectedOutstanding > creditLimit) {
+            return "Udhar exceeds the customer's credit limit."
+        }
+        return null
+    }
+
+    fun cleanNull(value: String?, fallback: String = ""): String {
+        if (value == null) return fallback
+        val trimmed = value.trim()
+        if (trimmed.equals("null", ignoreCase = true)) return fallback
+        return trimmed
     }
 }
+

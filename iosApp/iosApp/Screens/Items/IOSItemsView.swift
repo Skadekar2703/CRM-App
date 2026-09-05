@@ -14,6 +14,8 @@ struct IOSItemsView: View {
 }
 
 struct IOSItemsContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
     @State private var itemsList: [ItemModelIOS] = []
 
     @State private var searchQuery: String = ""
@@ -22,9 +24,10 @@ struct IOSItemsContentView: View {
     @State private var editingItem: ItemModelIOS? = nil
     @State private var deletingItem: ItemModelIOS? = nil
 
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
-    private let bgLight = Color(red: 248/255, green: 250/255, blue: 252/255)
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 156/255, green: 163/255, blue: 175/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var bgLight: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
     private let errorRed = Color(red: 220/255, green: 38/255, blue: 38/255)
 
@@ -79,7 +82,7 @@ struct IOSItemsContentView: View {
                         TextField("Search items...", text: $searchQuery)
                     }
                     .padding(12)
-                    .background(Color.white)
+                    .background(cardBg)
                     .cornerRadius(12)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 226/255, green: 232/255, blue: 240/255), lineWidth: 1))
 
@@ -184,79 +187,95 @@ struct ItemModelIOS: Identifiable {
     var stockQuantity: Double
 }
 
-struct IOSItemCard: View {
+struct IOSItemRowCard: View {
     let item: ItemModelIOS
     var onEdit: () -> Void
     var onDelete: () -> Void
 
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 156/255, green: 163/255, blue: 175/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
+    private let borderLight = Color(red: 226/255, green: 232/255, blue: 240/255)
     private let errorRed = Color(red: 220/255, green: 38/255, blue: 38/255)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(primaryBlue.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "shippingbox.fill")
+                    .font(.headline)
+                    .foregroundColor(primaryBlue)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
                     Text(item.name)
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(textPrimary)
-                    Text("\(item.brand) • \(item.code)")
-                        .font(.subheadline)
-                        .foregroundColor(textMuted)
-                }
 
-                Spacer()
+                    Spacer()
 
-                Text(item.category)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(red: 239/255, green: 246/255, blue: 255/255))
-                    .foregroundColor(primaryBlue)
-                    .cornerRadius(8)
-            }
-
-            Divider()
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("₹\(String(format: "%.2f", item.rate)) / \(item.unit)")
+                    Text("₹\(Int(item.rate))/\(item.unit)")
                         .font(.headline)
                         .fontWeight(.bold)
-                        .foregroundColor(textPrimary)
-                    Text("Stock: \(Int(item.stockQuantity)) \(item.unit)")
-                        .font(.caption)
-                        .foregroundColor(textMuted)
+                        .foregroundColor(primaryBlue)
                 }
 
-                Spacer()
+                HStack {
+                    Text("\(item.brand) • SKU: \(item.code)")
+                        .font(.caption)
+                        .foregroundColor(textMuted)
 
-                HStack(spacing: 8) {
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .font(.caption)
-                            .foregroundColor(textPrimary)
-                            .frame(width: 30, height: 30)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                            .clipShape(Circle())
-                    }
+                    Spacer()
 
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                            .foregroundColor(errorRed)
-                            .frame(width: 30, height: 30)
-                            .background(Color(red: 254/255, green: 242/255, blue: 242/255))
-                            .clipShape(Circle())
+                    Text(item.category)
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(primaryBlue.opacity(0.12))
+                        .foregroundColor(primaryBlue)
+                        .cornerRadius(6)
+                }
+
+                HStack {
+                    Text("Stock: \(Int(item.stockQuantity)) \(item.unit)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(item.stockQuantity > 10 ? .green : .orange)
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Button(action: onEdit) {
+                            Image(systemName: "pencil")
+                                .font(.caption)
+                                .foregroundColor(primaryBlue)
+                                .frame(width: 30, height: 30)
+                                .background(primaryBlue.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundColor(errorRed)
+                                .frame(width: 30, height: 30)
+                                .background(Color(red: 254/255, green: 242/255, blue: 242/255))
+                                .clipShape(Circle())
+                        }
                     }
                 }
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(cardBg)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
     }

@@ -89,7 +89,7 @@ fun SignUpScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DeepNavy)
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -108,7 +108,7 @@ fun SignUpScreen(
                     .fillMaxWidth()
                     .widthIn(max = 440.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = CardBackground,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 shadowElevation = 8.dp
             ) {
                 Column(

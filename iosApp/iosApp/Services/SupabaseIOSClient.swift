@@ -32,6 +32,51 @@ class SupabaseIOSClient: ObservableObject {
         restoreSession()
     }
 
+    func createSignedPhotoUrl(path: String, completion: @escaping (String?) -> Void) {
+        let clean = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, clean.lowercased() != "null" else {
+            completion(nil)
+            return
+        }
+        if clean.hasPrefix("http://") || clean.hasPrefix("https://") || clean.hasPrefix("data:image") {
+            completion(clean)
+            return
+        }
+
+        let storagePath = clean.replacingOccurrences(of: "^customer_photos/", with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(baseURL)/storage/v1/object/sign/customer_photos/\(storagePath)") else {
+            completion(nil)
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = currentSession?.accessToken, !token.isEmpty {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = ["expiresIn": 3600]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data, error == nil,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let signedPath = json["signedURL"] as? String else {
+                completion(nil)
+                return
+            }
+
+            if signedPath.hasPrefix("http") {
+                completion(signedPath)
+            } else {
+                completion("\(self.baseURL)\(signedPath)")
+            }
+        }.resume()
+    }
+
     func restoreSession() {
         guard let token = defaults.string(forKey: "\(sessionKey)_token"),
               let userId = defaults.string(forKey: "\(sessionKey)_id"),
@@ -95,6 +140,147 @@ class SupabaseIOSClient: ObservableObject {
         ]
 
         performAuthRequest(url: url, payload: payload, fallbackUsername: nil)
+    }
+
+    func loginByUsername(username: String, password: String, role: String) {
+        let cleanUsername = username.trimmingCharacters(in: .whitespaces).lowercased()
+        let email = "\(cleanUsername)@business.crm"
+
+        guard let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=password") else { return }
+
+        let payload: [String: Any] = [
+            "email": email,
+            "password": password
+        ]
+
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.errorMessage = nil
+            self.successMessage = nil
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+
+            if let error = error {
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                }
+                return
+            }
+
+            guard let data = data else {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Empty response from server"
+                }
+                return
+            }
+
+            do {
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    DispatchQueue.main.async {
+                        self.errorMessage = "Invalid JSON response"
+                    }
+                    return
+                }
+
+                if let errorDesc = json["error_description"] as? String {
+                    DispatchQueue.main.async {
+                        self.errorMessage = errorDesc
+                    }
+                    return
+                }
+                if let msg = json["msg"] as? String {
+                    DispatchQueue.main.async {
+                        self.errorMessage = msg
+                    }
+                    return
+                }
+
+                guard let accessToken = json["access_token"] as? String,
+                      let userObj = json["user"] as? [String: Any],
+                      let userId = userObj["id"] as? String else {
+                    DispatchQueue.main.async {
+                        self.errorMessage = "Invalid authentication response"
+                    }
+                    return
+                }
+
+                // STRICT POST-AUTHENTICATION AUTHORIZATION VERIFICATION
+                self.verifyBusinessMemberRole(userId: userId, token: accessToken, expectedRole: role)
+
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Failed to parse auth response: \(error.localizedDescription)"
+                }
+            }
+        }.resume()
+    }
+
+    private func verifyBusinessMemberRole(userId: String, token: String, expectedRole: String) {
+        guard let url = URL(string: "\(baseURL)/rest/v1/business_members?id=eq.\(userId)&select=role,status,business_id") else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data,
+                  let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]],
+                  let first = arr.first else {
+                DispatchQueue.main.async {
+                    self.logout()
+                    self.errorMessage = "Unable to verify business member role."
+                }
+                return
+            }
+
+            let realRole = (first["role"] as? String ?? "STAFF").uppercased()
+            let realStatus = first["status"] as? String ?? "Active"
+
+            DispatchQueue.main.async {
+                if realStatus.lowercased() == "disabled" {
+                    self.logout()
+                    self.errorMessage = "Your account has been disabled. Please contact your CRM Admin."
+                    return
+                }
+
+                if expectedRole.uppercased() == "ADMIN" && realRole != "ADMIN" {
+                    self.logout()
+                    self.errorMessage = "This account is not an Admin account. Please use Staff Login."
+                    return
+                }
+
+                if expectedRole.uppercased() == "STAFF" && realRole == "ADMIN" {
+                    self.logout()
+                    self.errorMessage = "This account is an ADMIN account. Please use Admin Login."
+                    return
+                }
+
+                // Authorization Passed
+                let session = UserSessionIOS(id: userId, email: "\(userId)@business.crm", username: first["username"] as? String, accessToken: token)
+                self.currentSession = session
+                self.saveSessionLocally(session)
+            }
+        }.resume()
     }
 
     func resetPassword(email: String) {
@@ -430,11 +616,152 @@ class SupabaseIOSClient: ObservableObject {
             guard let data = data,
                   let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]],
                   let created = array.first else {
-                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create record"])))
+                let msg = self.parseResponseError(data: data, statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: msg])))
                 return
             }
             completion(.success(created))
         }.resume()
+    }
+
+    func updateRecord(table: String, id: String, payload: [String: Any], completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let url = URL(string: "\(baseURL)/rest/v1/\(table)?id=eq.\(id)") else {
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = defaults.string(forKey: "\(sessionKey)_token") {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            if let httpResp = response as? HTTPURLResponse, !(200...299).contains(httpResp.statusCode) {
+                let msg = self.parseResponseError(data: data, statusCode: httpResp.statusCode)
+                completion(.failure(NSError(domain: "", code: httpResp.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])))
+                return
+            }
+            completion(.success(()))
+        }.resume()
+    }
+
+    func deleteRecord(table: String, id: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let url = URL(string: "\(baseURL)/rest/v1/\(table)?id=eq.\(id)") else {
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = defaults.string(forKey: "\(sessionKey)_token") {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            if let httpResp = response as? HTTPURLResponse, !(200...299).contains(httpResp.statusCode) {
+                let msg = self.parseResponseError(data: data, statusCode: httpResp.statusCode)
+                completion(.failure(NSError(domain: "", code: httpResp.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])))
+                return
+            }
+            completion(.success(()))
+        }.resume()
+    }
+
+    func invokeRPC(name: String, payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        guard let url = URL(string: "\(baseURL)/rest/v1/rpc/\(name)") else {
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid RPC URL"])))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = defaults.string(forKey: "\(sessionKey)_token") {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            if let httpResp = response as? HTTPURLResponse, !(200...299).contains(httpResp.statusCode) {
+                let msg = self.parseResponseError(data: data, statusCode: httpResp.statusCode)
+                completion(.failure(NSError(domain: "", code: httpResp.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])))
+                return
+            }
+            guard let data = data,
+                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse RPC response"])))
+                return
+            }
+            completion(.success(dict))
+        }.resume()
+    }
+
+    func generateNextCustomerIdRPC(businessId: String, completion: @escaping (String) -> Void) {
+        guard let url = URL(string: "\(baseURL)/rest/v1/rpc/generate_next_customer_id") else {
+            completion("100001")
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = defaults.string(forKey: "\(sessionKey)_token") {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = ["p_business_id": businessId]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data,
+                  let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: CharacterSet(charactersIn: "\" \n\r")),
+                  str.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else {
+                completion("100001")
+                return
+            }
+            completion(str)
+        }.resume()
+    }
+
+    private func parseResponseError(data: Data?, statusCode: Int) -> String {
+        guard let data = data, let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "Server error (\(statusCode))"
+        }
+        let msg = (json["msg"] as? String) ?? (json["message"] as? String) ?? (json["error_description"] as? String) ?? ""
+        if msg.contains("idx_customers_business_phone") {
+            return "This mobile number is already registered."
+        }
+        if msg.contains("idx_customers_business_customer_code") {
+            return "This CD Code is already registered."
+        }
+        return msg.isEmpty ? "Operation failed (\(statusCode))" : msg
     }
 
     func invokeFunction(name: String, payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
@@ -490,5 +817,153 @@ class SupabaseIOSClient: ObservableObject {
             return "Invalid login credentials."
         }
         return "Authentication failed. Please try again."
+    }
+
+    // MARK: - USERS & STAFF MANAGEMENT
+
+    func fetchBusinessMembers(completion: @escaping (Result<[IOSUserItem], Error>) -> Void) {
+        guard let url = URL(string: "\(supabaseUrl)/rest/v1/business_members?select=id,username,role,status,created_at&order=created_at.asc") else {
+            completion(.failure(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        if let token = self.sessionToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                DispatchQueue.main.async { completion(.failure(error)) }
+                return
+            }
+
+            guard let data = data, let jsonArr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to parse users."])))
+                }
+                return
+            }
+
+            let members: [IOSUserItem] = jsonArr.map { dict in
+                let id = dict["id"] as? String ?? ""
+                let username = dict["username"] as? String ?? "User"
+                let roleRaw = (dict["role"] as? String ?? "STAFF").uppercased()
+                let statusRaw = dict["status"] as? String ?? "Active"
+                let createdRaw = dict["created_at"] as? String ?? ""
+                let createdAt = createdRaw.count >= 10 ? String(createdRaw.prefix(10)) : "02 Sep 2026"
+
+                return IOSUserItem(
+                    id: id,
+                    username: username,
+                    email: "\(username)@business.crm",
+                    role: roleRaw == "ADMIN" ? "ADMIN" : "STAFF",
+                    status: statusRaw.caseInsensitiveCompare("Disabled") == .orderedSame ? "Disabled" : "Active",
+                    createdAt: createdAt
+                )
+            }
+
+            DispatchQueue.main.async {
+                completion(.success(members))
+            }
+        }.resume()
+    }
+
+    func changeStaffPassword(targetUserId: String, newPassword: String, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let url = URL(string: "\(supabaseUrl)/functions/v1/manage-staff") else {
+            completion(.failure(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = self.sessionToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let body: [String: Any] = [
+            "action": "CHANGE_PASSWORD",
+            "userId": targetUserId,
+            "password": newPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                DispatchQueue.main.async { completion(.failure(error)) }
+                return
+            }
+
+            guard let data = data, let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid server response"])))
+                }
+                return
+            }
+
+            if let err = json["error"] as? String {
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: err])))
+                }
+                return
+            }
+
+            let msg = (json["message"] as? String) ?? "Staff password changed successfully."
+            DispatchQueue.main.async {
+                completion(.success(msg))
+            }
+        }.resume()
+    }
+
+    func toggleStaffStatus(targetUserId: String, newStatus: String, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let url = URL(string: "\(supabaseUrl)/functions/v1/manage-staff") else {
+            completion(.failure(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = self.sessionToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let body: [String: Any] = [
+            "action": "TOGGLE_STATUS",
+            "userId": targetUserId,
+            "status": newStatus
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                DispatchQueue.main.async { completion(.failure(error)) }
+                return
+            }
+
+            guard let data = data, let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid server response"])))
+                }
+                return
+            }
+
+            if let err = json["error"] as? String {
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: err])))
+                }
+                return
+            }
+
+            let msg = (json["message"] as? String) ?? "Staff status updated successfully."
+            DispatchQueue.main.async {
+                completion(.success(msg))
+            }
+        }.resume()
     }
 }

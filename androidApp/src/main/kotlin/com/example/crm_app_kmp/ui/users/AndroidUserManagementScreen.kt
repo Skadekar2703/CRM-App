@@ -14,69 +14,109 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.crm_app_kmp.data.SupabaseAndroidClient
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
-import com.example.crm_app_kmp.ui.theme.TextMuted
-import com.example.crm_app_kmp.ui.theme.TextPrimary
 import com.example.crm_app_kmp.users.UserModel
-import com.example.crm_app_kmp.users.UserRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AndroidUserManagementContent() {
-    val users = remember { mutableStateListOf(*UserRepository.getAllUsers().toTypedArray()) }
+    val context = LocalContext.current
+    val supabaseClient = remember { SupabaseAndroidClient(context) }
+    val scope = rememberCoroutineScope()
+
+    var users by remember { mutableStateOf<List<UserModel>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isOperating by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var toastMsg by remember { mutableStateOf<String?>(null) }
+    var currentUserRole by remember { mutableStateOf("STAFF") }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedRoleFilter by remember { mutableStateOf("All Roles") }
-    var dateFrom by remember { mutableStateOf("") }
-    var dateTo by remember { mutableStateOf("") }
 
-    var showFormDialog by remember { mutableStateOf(false) }
-    var editingUser by remember { mutableStateOf<UserModel?>(null) }
-    var deletingUser by remember { mutableStateOf<UserModel?>(null) }
-    var toastMsg by remember { mutableStateOf<String?>(null) }
+    // DIALOG STATES
+    var passwordTargetUser by remember { mutableStateOf<UserModel?>(null) }
+    var statusTargetUser by remember { mutableStateOf<UserModel?>(null) }
 
-    val filteredUsers = UserRepository.getFilteredUsers(
-        searchQuery = searchQuery,
-        roleFilter = selectedRoleFilter,
-        dateFrom = dateFrom,
-        dateTo = dateTo
-    )
+    fun showToast(msg: String) {
+        toastMsg = msg
+    }
+
+    fun loadUsers() {
+        scope.launch {
+            isLoading = true
+            errorMessage = null
+            currentUserRole = supabaseClient.getUserRole()
+            val res = supabaseClient.fetchBusinessMembers()
+            if (res.isSuccess) {
+                users = res.getOrDefault(emptyList())
+            } else {
+                errorMessage = res.exceptionOrNull()?.message ?: "Unable to load users."
+            }
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadUsers()
+    }
+
+    val filteredUsers = remember(users, searchQuery, selectedRoleFilter) {
+        val q = searchQuery.lowercase().trim()
+        users.filter { user ->
+            val matchesQ = q.isEmpty() ||
+                    user.username.lowercase().contains(q) ||
+                    user.email.lowercase().contains(q) ||
+                    user.role.lowercase().contains(q) ||
+                    user.status.lowercase().contains(q) ||
+                    user.id.lowercase().contains(q)
+
+            val matchesRole = selectedRoleFilter == "All Roles" || user.role.equals(selectedRoleFilter, ignoreCase = true)
+            matchesQ && matchesRole
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -92,22 +132,25 @@ fun AndroidUserManagementContent() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("User Management", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Manage system user accounts & roles", fontSize = 12.sp, color = TextMuted)
+                    Text(
+                        text = "User Management",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Manage business staff accounts, admin privileges & passwords",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                Button(
-                    onClick = {
-                        searchQuery = ""
-                        selectedRoleFilter = "All Roles"
-                        dateFrom = ""
-                        dateTo = ""
-                        toastMsg = "Filters reset."
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Clear All", fontSize = 12.sp)
+                IconButton(onClick = { loadUsers() }) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
@@ -116,12 +159,12 @@ fun AndroidUserManagementContent() {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("All Roles", "Admin", "User").forEach { role ->
+                listOf("All Roles", "ADMIN", "STAFF").forEach { role ->
                     val isSelected = selectedRoleFilter == role
                     Surface(
                         onClick = { selectedRoleFilter = role },
-                        color = if (isSelected) PrimaryBlue else Color(0xFFF1F5F9),
-                        contentColor = if (isSelected) Color.White else TextPrimary,
+                        color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                         shape = RoundedCornerShape(20.dp)
                     ) {
                         Text(
@@ -138,14 +181,26 @@ fun AndroidUserManagementContent() {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search by ID, username, email or role...", fontSize = 13.sp, color = TextMuted) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                placeholder = {
+                    Text(
+                        "Search by username, role, or status...",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // TOAST MESSAGE
+            // TOAST NOTIFICATION
             toastMsg?.let { msg ->
                 Surface(
                     color = Color(0xFFF0FDF4),
@@ -162,15 +217,68 @@ fun AndroidUserManagementContent() {
                 }
             }
 
+            // ERROR DISPLAY WITH RETRY
+            errorMessage?.let { err ->
+                Surface(
+                    color = Color(0xFFFEF2F2),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚠️ $err",
+                            color = Color(0xFFDC2626),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = { loadUsers() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("Retry", fontSize = 11.sp, color = Color.White)
+                        }
+                    }
+                }
+            }
+
             // USER CARDS LIST
-            if (filteredUsers.isEmpty()) {
+            if (isLoading) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No user accounts found.", color = TextMuted, fontSize = 14.sp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = PrimaryBlue)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            "Loading business users...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            } else if (filteredUsers.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No user accounts found.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
                 }
             } else {
                 LazyColumn(
@@ -178,105 +286,123 @@ fun AndroidUserManagementContent() {
                     modifier = Modifier.weight(1f)
                 ) {
                     items(filteredUsers, key = { it.id }) { user ->
-                        UserCard(
+                        UserCardItem(
                             user = user,
-                            onEdit = {
-                                editingUser = user
-                                showFormDialog = true
-                            },
-                            onDelete = { deletingUser = user }
+                            currentUserRole = currentUserRole,
+                            onChangePassword = { passwordTargetUser = user },
+                            onToggleStatus = { statusTargetUser = user }
                         )
                     }
                 }
             }
         }
-
-        // FAB ADD BUTTON
-        FloatingActionButton(
-            onClick = {
-                editingUser = null
-                showFormDialog = true
-            },
-            containerColor = PrimaryBlue,
-            contentColor = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(20.dp)
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Add User", modifier = Modifier.size(24.dp))
-        }
     }
 
-    // ADD / EDIT USER FORM DIALOG
-    if (showFormDialog) {
-        UserFormDialog(
-            editingUser = editingUser,
-            onDismiss = { showFormDialog = false },
-            onSave = { username, email, role ->
-                if (editingUser != null) {
-                    val updated = UserRepository.updateUser(
-                        id = editingUser!!.id,
-                        username = username,
-                        email = email,
-                        role = role
-                    )
-                    if (updated != null) {
-                        val idx = users.indexOfFirst { it.id == editingUser!!.id }
-                        if (idx >= 0) users[idx] = updated
-                        toastMsg = "User '$username' updated."
+    // CHANGE STAFF PASSWORD DIALOG
+    passwordTargetUser?.let { target ->
+        ChangePasswordDialog(
+            targetUser = target,
+            isSubmitting = isOperating,
+            onDismiss = { passwordTargetUser = null },
+            onConfirm = { newPass ->
+                scope.launch {
+                    isOperating = true
+                    val res = supabaseClient.changeStaffPassword(target.id, newPass)
+                    isOperating = false
+                    if (res.isSuccess) {
+                        showToast("Password updated for '${target.username}'.")
+                        passwordTargetUser = null
+                        loadUsers()
+                    } else {
+                        showToast("Error: ${res.exceptionOrNull()?.message ?: "Failed to change password"}")
                     }
-                } else {
-                    val newU = UserRepository.addUser(
-                        username = username,
-                        email = email,
-                        role = role
-                    )
-                    users.add(0, newU)
-                    toastMsg = "User '$username' created."
                 }
-                showFormDialog = false
             }
         )
     }
 
-    // DELETE USER DIALOG
-    deletingUser?.let { target ->
-        Dialog(onDismissRequest = { deletingUser = null }) {
+    // DISABLE / ENABLE STAFF DIALOG
+    statusTargetUser?.let { target ->
+        val willDisable = target.status.equals("Active", ignoreCase = true)
+        val newStatus = if (willDisable) "Disabled" else "Active"
+
+        Dialog(onDismissRequest = { if (!isOperating) statusTargetUser = null }) {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Delete User Account?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Delete account for '${target.username}' (${target.email})?", fontSize = 14.sp, color = TextMuted)
+                    Text(
+                        text = if (willDisable) "Disable Staff Account?" else "Enable Staff Account?",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (willDisable)
+                            "Disabling '${target.username}' will block CRM login access immediately. Customer data and history will remain safe."
+                        else
+                            "Enabling '${target.username}' will restore their login access to CRM.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
                         Button(
-                            onClick = { deletingUser = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                            onClick = { statusTargetUser = null },
+                            enabled = !isOperating,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Cancel", fontSize = 13.sp)
                         }
+
                         Spacer(modifier = Modifier.width(8.dp))
+
                         Button(
                             onClick = {
-                                UserRepository.deleteUser(target.id)
-                                users.removeAll { it.id == target.id }
-                                toastMsg = "User deleted."
-                                deletingUser = null
+                                scope.launch {
+                                    isOperating = true
+                                    val res = supabaseClient.toggleStaffStatus(target.id, newStatus)
+                                    isOperating = false
+                                    if (res.isSuccess) {
+                                        showToast(
+                                            if (willDisable) "Staff account '${target.username}' disabled successfully."
+                                            else "Staff account '${target.username}' enabled successfully."
+                                        )
+                                        statusTargetUser = null
+                                        loadUsers()
+                                    } else {
+                                        showToast("Error: ${res.exceptionOrNull()?.message ?: "Operation failed"}")
+                                    }
+                                }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                            enabled = !isOperating,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (willDisable) ErrorRed else Color(0xFF16A34A)
+                            ),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            if (isOperating) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
+                            } else {
+                                Text(
+                                    text = if (willDisable) "Disable Account" else "Enable Account",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -286,64 +412,145 @@ fun AndroidUserManagementContent() {
 }
 
 @Composable
-private fun UserCard(
+private fun UserCardItem(
     user: UserModel,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    currentUserRole: String,
+    onChangePassword: () -> Unit,
+    onToggleStatus: () -> Unit
 ) {
+    val isStaff = user.role.equals("STAFF", ignoreCase = true)
+    val isAdmin = user.role.equals("ADMIN", ignoreCase = true)
+    val isActive = user.status.equals("Active", ignoreCase = true)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(user.username, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("ID: #${user.id} | ${user.email}", fontSize = 12.sp, color = TextMuted)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = user.username,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = user.email,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                // ROLE BADGE
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (user.role == "Admin") Color(0xFFDCFCE7) else Color(0xFFEFF6FF))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = user.role,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (user.role == "Admin") Color(0xFF16A34A) else PrimaryBlue
-                    )
+                // BADGES
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // ROLE BADGE
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isAdmin) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (isAdmin) "ADMIN" else "STAFF",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAdmin) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // STATUS BADGE
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isActive) Color(0xFFDCFCE7) else Color(0xFFFEE2E2))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (isActive) "Active" else "Disabled",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActive) Color(0xFF15803D) else Color(0xFFDC2626)
+                        )
+                    }
                 }
             }
 
-            HorizontalDivider(color = Color(0xFFF1F5F9))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+            // BOTTOM ACTIONS / INFORMATION
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Created: ${user.createdAt}", fontSize = 12.sp, color = TextMuted)
+                Text(
+                    text = "Created: ${user.createdAt}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextPrimary, modifier = Modifier.size(16.dp))
+                if (isAdmin) {
+                    // ADMIN ROW IMMUNIZATION BADGE
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Admin Account",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(16.dp))
+                } else if (currentUserRole.equals("ADMIN", ignoreCase = true) && isStaff) {
+                    // ADMIN CONTROLS FOR STAFF USER
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onChangePassword,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Password", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = onToggleStatus,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isActive) ErrorRed else Color(0xFF16A34A)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(
+                                if (isActive) Icons.Default.Lock else Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isActive) "Disable" else "Enable",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -352,28 +559,27 @@ private fun UserCard(
 }
 
 @Composable
-private fun UserFormDialog(
-    editingUser: UserModel?,
+private fun ChangePasswordDialog(
+    targetUser: UserModel,
+    isSubmitting: Boolean,
     onDismiss: () -> Unit,
-    onSave: (username: String, email: String, role: String) -> Unit
+    onConfirm: (newPassword: String) -> Unit
 ) {
-    var username by remember { mutableStateOf(editingUser?.username ?: "") }
-    var email by remember { mutableStateOf(editingUser?.email ?: "") }
-    var role by remember { mutableStateOf(editingUser?.role ?: "User") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = { if (!isSubmitting) onDismiss() }) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -381,43 +587,42 @@ private fun UserFormDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (editingUser != null) "Edit User Account" else "Add New User Account",
+                        text = "Change Staff Password",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = onDismiss, enabled = !isSubmitting) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 }
+
+                Text(
+                    text = "Set a new login password for staff user '${targetUser.username}'",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 errorMsg?.let { err ->
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    placeholder = { Text("Username / Full Name *", fontSize = 13.sp) },
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    placeholder = { Text("New Password (min 6 chars)", fontSize = 13.sp) },
                     singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 )
 
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    placeholder = { Text("Email Address *", fontSize = 13.sp) },
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    placeholder = { Text("Confirm New Password", fontSize = 13.sp) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = role,
-                    onValueChange = { role = it },
-                    placeholder = { Text("Role (Admin / User) *", fontSize = 13.sp) },
-                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 )
@@ -428,7 +633,11 @@ private fun UserFormDialog(
                 ) {
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
+                        enabled = !isSubmitting,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Cancel", fontSize = 13.sp)
@@ -438,18 +647,23 @@ private fun UserFormDialog(
 
                     Button(
                         onClick = {
-                            if (username.isBlank()) {
-                                errorMsg = "Username is required."
-                            } else if (email.isBlank() || !email.contains("@")) {
-                                errorMsg = "Valid Email address is required."
+                            if (newPassword.length < 6) {
+                                errorMsg = "Password must be at least 6 characters."
+                            } else if (newPassword != confirmPassword) {
+                                errorMsg = "Passwords do not match."
                             } else {
-                                onSave(username.trim(), email.trim(), role.trim())
+                                onConfirm(newPassword.trim())
                             }
                         },
+                        enabled = !isSubmitting,
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text(if (editingUser != null) "Save Changes" else "Create User", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        if (isSubmitting) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
+                        } else {
+                            Text("Update Password", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             }

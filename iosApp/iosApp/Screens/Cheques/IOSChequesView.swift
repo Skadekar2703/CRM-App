@@ -27,11 +27,12 @@ struct IOSChequesView: View {
 }
 
 struct IOSChequesContentView: View {
+    @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
+
     @State private var cheques: [ChequeIOSItem] = [
-        ChequeIOSItem(id: "1", chequeNo: "CHQ-2023-0891", partyName: "Acme Corp", bankName: "HDFC Bank", amount: 45000.0, direction: "Inward", issueDate: "Oct 12, 2023", dueDate: "Oct 25, 2023", status: "Pending", notes: "Client payment for Invoice #1024"),
-        ChequeIOSItem(id: "2", chequeNo: "CHQ-2023-0892", partyName: "TechSolutions Ltd", bankName: "ICICI Bank", amount: 125000.0, direction: "Inward", issueDate: "Oct 15, 2023", dueDate: "Nov 01, 2023", status: "Cleared", notes: "Annual retainer fee"),
-        ChequeIOSItem(id: "3", chequeNo: "CHQ-2023-0893", partyName: "Global Traders", bankName: "SBI", amount: 32000.0, direction: "Outward", issueDate: "Oct 18, 2023", dueDate: "Nov 05, 2023", status: "Bounced", notes: "Vendor advance payment"),
-        ChequeIOSItem(id: "4", chequeNo: "CHQ-2023-0894", partyName: "Vanguard Systems", bankName: "Axis Bank", amount: 18500.0, direction: "Inward", issueDate: "Oct 20, 2023", dueDate: "Nov 10, 2023", status: "Pending", notes: "Hardware order payment")
+        ChequeIOSItem(id: "1", chequeNo: "CHQ-2023-0891", partyName: "Acme Corp", bankName: "HDFC Bank", amount: 45000.0, direction: "Inward", issueDate: "05 Sep 2026", dueDate: "15 Sep 2026", status: "Pending", notes: "Client payment for Invoice #1024"),
+        ChequeIOSItem(id: "2", chequeNo: "CHQ-2023-0892", partyName: "TechSolutions Ltd", bankName: "ICICI Bank", amount: 125000.0, direction: "Inward", issueDate: "01 Sep 2026", dueDate: "10 Sep 2026", status: "Cleared", notes: "Annual retainer fee"),
+        ChequeIOSItem(id: "3", chequeNo: "CHQ-2023-0893", partyName: "Global Traders", bankName: "SBI", amount: 32000.0, direction: "Outward", issueDate: "20 Aug 2026", dueDate: "30 Aug 2026", status: "Bounced", notes: "Vendor advance payment")
     ]
 
     @State private var searchQuery: String = ""
@@ -39,11 +40,18 @@ struct IOSChequesContentView: View {
     @State private var showFormSheet: Bool = false
     @State private var editingCheque: ChequeIOSItem? = nil
     @State private var deletingCheque: ChequeIOSItem? = nil
+    @State private var statusActionTarget: (cheque: ChequeIOSItem, nextStatus: String)? = nil
 
-    private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
-    private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
-    private let bgLight = Color(red: 248/255, green: 250/255, blue: 252/255)
+    private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
+    private var textMuted: Color { isDarkMode ? Color(red: 156/255, green: 163/255, blue: 175/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
+    private var bgLight: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
+    private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
     private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
+
+    var allCount: Int { cheques.count }
+    var pendingCount: Int { cheques.filter { $0.status.caseInsensitiveCompare("Pending") == .orderedSame }.count }
+    var clearedCount: Int { cheques.filter { $0.status.caseInsensitiveCompare("Cleared") == .orderedSame }.count }
+    var bouncedCount: Int { cheques.filter { $0.status.caseInsensitiveCompare("Bounced") == .orderedSame }.count }
 
     var filteredCheques: [ChequeIOSItem] {
         cheques.filter { c in
@@ -64,12 +72,20 @@ struct IOSChequesContentView: View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Cheques")
+                    Text("Cheque Register")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(textPrimary)
 
-                    // SEARCH & FILTER BAR (MOBILE REF)
+                    // SUMMARY COUNTERS
+                    HStack(spacing: 8) {
+                        IOSMetricCard(title: "ALL", value: "\(allCount)", color: primaryBlue)
+                        IOSMetricCard(title: "PENDING", value: "\(pendingCount)", color: Color.orange)
+                        IOSMetricCard(title: "CLEARED", value: "\(clearedCount)", color: Color.green)
+                        IOSMetricCard(title: "BOUNCED", value: "\(bouncedCount)", color: Color.red)
+                    }
+
+                    // SEARCH & FILTER BAR
                     HStack(spacing: 10) {
                         HStack {
                             Image(systemName: "magnifyingglass")
@@ -79,7 +95,7 @@ struct IOSChequesContentView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
-                        .background(Color.white)
+                        .background(cardBg)
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 203/255, green: 213/255, blue: 225/255), lineWidth: 1))
 
@@ -95,13 +111,13 @@ struct IOSChequesContentView: View {
                                 .font(.title2)
                                 .foregroundColor(primaryBlue)
                                 .frame(width: 44, height: 44)
-                                .background(Color.white)
+                                .background(cardBg)
                                 .cornerRadius(12)
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 203/255, green: 213/255, blue: 225/255), lineWidth: 1))
                         }
                     }
 
-                    // VERTICAL CHEQUE CARDS LIST (MOBILE REF)
+                    // VERTICAL CHEQUE CARDS LIST
                     if filteredCheques.isEmpty {
                         VStack {
                             Spacer()
@@ -122,6 +138,12 @@ struct IOSChequesContentView: View {
                                     },
                                     onDelete: {
                                         deletingCheque = cheque
+                                    },
+                                    onClearStatus: {
+                                        statusActionTarget = (cheque, "Cleared")
+                                    },
+                                    onBounceStatus: {
+                                        statusActionTarget = (cheque, "Bounced")
                                     }
                                 )
                             }
@@ -172,6 +194,47 @@ struct IOSChequesContentView: View {
                 secondaryButton: .cancel()
             )
         }
+        .alert(isPresented: Binding<Bool>(
+            get: { statusActionTarget != nil },
+            set: { if !$0 { statusActionTarget = nil } }
+        )) {
+            let target = statusActionTarget?.cheque
+            let nextSt = statusActionTarget?.nextStatus ?? "Cleared"
+            return Alert(
+                title: Text("Confirm Status Change"),
+                message: Text("Mark cheque #\(target?.chequeNo ?? "") as \(nextSt)?"),
+                primaryButton: .default(Text("Confirm")) {
+                    if let t = target, let idx = cheques.firstIndex(where: { $0.id == t.id }) {
+                        cheques[idx].status = nextSt
+                    }
+                    statusActionTarget = nil
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+}
+
+struct IOSMetricCard: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+            Text(value)
+                .font(.callout)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.1))
+        .cornerRadius(10)
     }
 }
 
@@ -179,21 +242,13 @@ struct IOSChequeCard: View {
     let cheque: ChequeIOSItem
     var onEdit: () -> Void
     var onDelete: () -> Void
+    var onClearStatus: () -> Void
+    var onBounceStatus: () -> Void
 
     private let textPrimary = Color(red: 30/255, green: 41/255, blue: 59/255)
     private let textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
     private let errorRed = Color(red: 220/255, green: 38/255, blue: 38/255)
-
-    var statusColor: (bg: Color, text: Color) {
-        switch cheque.status {
-        case "Cleared":
-            return (Color(red: 220/255, green: 252/255, blue: 231/255), Color(red: 21/255, green: 128/255, blue: 61/255))
-        case "Bounced":
-            return (Color(red: 254/255, green: 242/255, blue: 242/255), Color(red: 220/255, green: 38/255, blue: 38/255))
-        default:
-            return (Color(red: 255/255, green: 237/255, blue: 213/255), Color(red: 194/255, green: 65/255, blue: 12/255))
-        }
-    }
+    private let primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -203,7 +258,7 @@ struct IOSChequeCard: View {
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(textPrimary)
-                    Text("Ref: \(cheque.chequeNo)")
+                    Text("Ref: \(cheque.chequeNo) • \(cheque.bankName)")
                         .font(.subheadline)
                         .foregroundColor(textMuted)
                 }
@@ -211,26 +266,26 @@ struct IOSChequeCard: View {
                 Spacer()
 
                 Text(cheque.status)
-                    .font(.caption)
+                    .font(.caption2)
                     .fontWeight(.bold)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(statusColor.bg)
-                    .foregroundColor(statusColor.text)
-                    .cornerRadius(12)
+                    .background(cheque.status == "Cleared" ? Color.green.opacity(0.15) : cheque.status == "Bounced" ? Color.red.opacity(0.15) : Color.orange.opacity(0.15))
+                    .foregroundColor(cheque.status == "Cleared" ? .green : cheque.status == "Bounced" ? .red : .orange)
+                    .cornerRadius(8)
             }
 
             Divider()
 
             HStack {
-                Text("Date: \(cheque.issueDate)")
-                    .font(.subheadline)
+                Text("Issue: \(cheque.issueDate)")
+                    .font(.caption)
                     .foregroundColor(textMuted)
 
                 Spacer()
 
                 Text("₹\(Int(cheque.amount))")
-                    .font(.title3)
+                    .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(textPrimary)
 
@@ -238,12 +293,11 @@ struct IOSChequeCard: View {
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
                             .font(.caption)
-                            .foregroundColor(textPrimary)
+                            .foregroundColor(primaryBlue)
                             .frame(width: 30, height: 30)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .background(primaryBlue.opacity(0.1))
                             .clipShape(Circle())
                     }
-
                     Button(action: onDelete) {
                         Image(systemName: "trash")
                             .font(.caption)
@@ -253,7 +307,30 @@ struct IOSChequeCard: View {
                             .clipShape(Circle())
                     }
                 }
-                .padding(.leading, 6)
+            }
+
+            if cheque.status.caseInsensitiveCompare("Pending") == .orderedSame {
+                HStack(spacing: 8) {
+                    Button(action: onClearStatus) {
+                        Text("✓ Clear")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color.green)
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+
+                    Button(action: onBounceStatus) {
+                        Text("✕ Bounce")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(errorRed)
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .background(errorRed.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                }
             }
         }
         .padding(16)
@@ -273,20 +350,41 @@ struct IOSChequeFormSheet: View {
     @State private var bankName: String = ""
     @State private var amount: String = ""
     @State private var direction: String = "Inward"
-    @State private var issueDate: String = "Oct 12, 2023"
-    @State private var dueDate: String = "Oct 25, 2023"
+    @State private var issueDate: Date = Date()
+    @State private var dueDate: Date = Date()
     @State private var status: String = "Pending"
     @State private var notes: String = ""
+    @State private var errorMsg: String? = nil
+
+    private let dateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "dd MMM yyyy"
+        return df
+    }()
 
     var body: some View {
         NavigationView {
             Form {
+                if let err = errorMsg {
+                    Section {
+                        Text("⚠️ \(err)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                    }
+                }
+
                 Section(header: Text("Cheque Information")) {
                     TextField("Party / Company Name *", text: $partyName)
                     TextField("Cheque Number", text: $chequeNo)
                     TextField("Bank Name", text: $bankName)
                     TextField("Amount (₹) *", text: $amount)
                         .keyboardType(.decimalPad)
+                }
+
+                Section(header: Text("Dates")) {
+                    DatePicker("Issue Date *", selection: $issueDate, displayedComponents: .date)
+                    DatePicker("Due Date", selection: $dueDate, displayedComponents: .date)
                 }
 
                 Section(header: Text("Details")) {
@@ -299,8 +397,6 @@ struct IOSChequeFormSheet: View {
                         Text("Cleared").tag("Cleared")
                         Text("Bounced").tag("Bounced")
                     }
-                    TextField("Issue Date", text: $issueDate)
-                    TextField("Due Date", text: $dueDate)
                     TextField("Notes / Ref", text: $notes)
                 }
             }
@@ -308,8 +404,16 @@ struct IOSChequeFormSheet: View {
             .navigationBarItems(
                 leading: Button("Cancel") { presentationMode.wrappedValue.dismiss() },
                 trailing: Button("Save") {
-                    let amtNum = Double(amount) ?? 45000.0
-                    onSave(chequeNo.isEmpty ? "CHQ-2023-0895" : chequeNo, partyName.isEmpty ? "Client" : partyName, bankName.isEmpty ? "HDFC Bank" : bankName, amtNum, direction, issueDate, dueDate, status, notes)
+                    let amtNum = Double(amount) ?? 0.0
+                    if partyName.trimmingCharacters(in: .whitespaces).isEmpty || amtNum <= 0 {
+                        errorMsg = "Party Name and valid Amount are required."
+                    } else if dueDate < issueDate {
+                        errorMsg = "Due Date cannot be earlier than Issue Date."
+                    } else {
+                        let issueStr = dateFormatter.string(from: issueDate)
+                        let dueStr = dateFormatter.string(from: dueDate)
+                        onSave(chequeNo.isEmpty ? "CHQ-2023-0895" : chequeNo, partyName, bankName.isEmpty ? "HDFC Bank" : bankName, amtNum, direction, issueStr, dueStr, status, notes)
+                    }
                 }
             )
             .onAppear {
@@ -319,8 +423,12 @@ struct IOSChequeFormSheet: View {
                     bankName = c.bankName
                     amount = String(c.amount)
                     direction = c.direction
-                    issueDate = c.issueDate
-                    dueDate = c.dueDate
+                    if let parsedIssue = dateFormatter.date(from: c.issueDate) {
+                        issueDate = parsedIssue
+                    }
+                    if let parsedDue = dateFormatter.date(from: c.dueDate) {
+                        dueDate = parsedDue
+                    }
                     status = c.status
                     notes = c.notes
                 }
