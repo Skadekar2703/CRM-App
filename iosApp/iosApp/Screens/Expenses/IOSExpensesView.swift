@@ -73,8 +73,8 @@ struct IOSExpensesContentView: View {
     @State private var showFormSheet = false
     @State private var editingExpense: IOSExpenseItem? = nil
     @State private var deletingExpense: IOSExpenseItem? = nil
-    @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
+    @State private var userRole: String = "STAFF"
 
     var totalExpenses: Double { expenses.reduce(0) { $0 + $1.amount } }
     var monthTotal: Double { expenses.filter { $0.date.contains("Aug") || $0.date.contains("Jun") }.reduce(0) { $0 + $1.amount } }
@@ -192,13 +192,15 @@ struct IOSExpensesContentView: View {
                         ForEach(filteredExpenses) { expense in
                             IOSExpenseCard(
                                 expense: expense,
+                                userRole: userRole,
                                 onEdit: {
                                     editingExpense = expense
                                     showFormSheet = true
                                 },
                                 onDelete: {
-                                    deletingExpense = expense
-                                    showDeleteAlert = true
+                                    if userRole == "ADMIN" {
+                                        deletingExpense = expense
+                                    }
                                 }
                             )
                         }
@@ -253,17 +255,15 @@ struct IOSExpensesContentView: View {
                 }
             )
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Expense"),
-                message: Text("Are you sure you want to delete expense '\(deletingExpense?.category ?? "")' (₹\(Int(deletingExpense?.amount ?? 0)))?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deletingExpense {
-                        expenses.removeAll { $0.id == target.id }
-                        toastMsg = "Expense '\(target.category)' deleted"
-                    }
-                },
-                secondaryButton: .cancel()
+        .sheet(item: $deletingExpense) { target in
+            IOSThreeStepDeleteSheet(
+                itemName: "Expense: \(target.category)",
+                itemDetails: "Amount: ₹\(Int(target.amount)) | Date: \(target.date)",
+                userRole: userRole,
+                onConfirmDelete: {
+                    expenses.removeAll { $0.id == target.id }
+                    toastMsg = "Expense '\(target.category)' deleted"
+                }
             )
         }
     }
@@ -271,6 +271,7 @@ struct IOSExpensesContentView: View {
 
 struct IOSExpenseCard: View {
     let expense: IOSExpenseItem
+    var userRole: String = "STAFF"
     var onEdit: () -> Void
     var onDelete: () -> Void
 
@@ -323,13 +324,15 @@ struct IOSExpenseCard: View {
                             .cornerRadius(6)
                     }
 
-                    Button(action: onDelete) {
-                        Image(systemName: "trash.fill")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(6)
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(6)
+                    if userRole.uppercased() == "ADMIN" {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash.fill")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(6)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(6)
+                        }
                     }
                 }
             }

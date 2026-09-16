@@ -58,6 +58,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.crm_app_kmp.transports.TransportModel
 import com.example.crm_app_kmp.transports.TransportRepository
 import com.example.crm_app_kmp.ui.components.CrmRootScaffold
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -142,7 +143,7 @@ fun AndroidTransportsContent() {
 
                 Button(
                     onClick = { refreshTransports() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE2E8F0), contentColor = TextPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue, contentColor = Color.White),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text("Refresh", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -305,55 +306,23 @@ fun AndroidTransportsContent() {
     }
 
     deletingTransport?.let { target ->
-        Dialog(onDismissRequest = { deletingTransport = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Transport?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete '${target.transportName}'?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = { deletingTransport = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val res = supabaseClient.deleteTransport(target.id)
-                                    res.onSuccess {
-                                        transports.removeAll { it.id == target.id }
-                                        toastMsg = "Transport '${target.transportName}' deleted."
-                                    }.onFailure { err ->
-                                        toastMsg = err.message
-                                    }
-                                    deletingTransport = null
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
+        ThreeStepDeleteDialog(
+            itemName = "Transport: ${target.transportName}",
+            itemDetails = "Phone: ${target.mobile}, Vehicle: ${target.vehicleNumber}",
+            onDismiss = { deletingTransport = null },
+            onConfirmDelete = {
+                scope.launch {
+                    val res = supabaseClient.deleteTransport(target.id)
+                    res.onSuccess {
+                        transports.removeAll { it.id == target.id }
+                        toastMsg = "Transport '${target.transportName}' deleted."
+                    }.onFailure { err ->
+                        toastMsg = err.message
                     }
+                    deletingTransport = null
                 }
             }
-        }
+        )
     }
 }
 
@@ -511,7 +480,7 @@ private fun TransportFormDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -519,7 +488,7 @@ private fun TransportFormDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (editingTransport != null) "Edit Transport" else "Add New Transport",
+                        text = if (editingTransport != null) "Edit Transport Entity" else "Add New Transport Entity",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -530,92 +499,96 @@ private fun TransportFormDialog(
                 }
 
                 errorMsg?.let { err ->
-                    Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedTextField(
-                    value = transportName,
-                    onValueChange = { transportName = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Transport Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = contactPerson,
-                        onValueChange = { contactPerson = it },
-                        placeholder = { Text("Contact Person", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = mobile,
-                        onValueChange = { mobile = it },
-                        placeholder = { Text("Mobile Number", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                OutlinedTextField(
-                    value = vehicleNumber,
-                    onValueChange = { vehicleNumber = it },
-                    placeholder = { Text("Vehicle Number", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = status == "Active",
-                        onClick = { status = "Active" },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                    )
-                    Text("Active", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    RadioButton(
-                        selected = status == "Inactive",
-                        onClick = { status = "Inactive" },
-                        colors = RadioButtonDefaults.colors(selectedColor = ErrorRed)
-                    )
-                    Text("Inactive", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Cancel", fontSize = 13.sp)
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
                     }
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            if (transportName.isBlank()) {
-                                errorMsg = "Transport Name is required."
-                            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = transportName,
+                            onValueChange = { transportName = it; errorMsg = null },
+                            label = "Transport / Company Name",
+                            placeholder = "e.g. Alpha Logistics Pvt Ltd",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppPhoneField(
+                                    value = mobile,
+                                    onValueChange = { mobile = it; errorMsg = null },
+                                    label = "Mobile Number",
+                                    placeholder = "9876543210",
+                                    isRequired = true
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = contactPerson,
+                                    onValueChange = { contactPerson = it; errorMsg = null },
+                                    label = "Contact Person",
+                                    placeholder = "Rajesh Kumar",
+                                    isRequired = true
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = vehicleNumber,
+                            onValueChange = { vehicleNumber = it },
+                            label = "Vehicle Number / Fleet Info",
+                            placeholder = "e.g. MH 12 AB 3456"
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppDropdown(
+                            value = status,
+                            onValueChange = { status = it },
+                            label = "Status",
+                            options = listOf("Active", "Inactive"),
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingTransport != null) "Save Changes" else "Add Transport",
+                            onClick = {
+                                if (transportName.isBlank()) {
+                                    errorMsg = "Transport Name is required."
+                                    return@AppFormButton
+                                }
+                                if (mobile.isBlank()) {
+                                    errorMsg = "Mobile number is required."
+                                    return@AppFormButton
+                                }
+                                if (contactPerson.isBlank()) {
+                                    errorMsg = "Contact Person is required."
+                                    return@AppFormButton
+                                }
                                 onSave(transportName.trim(), mobile.trim(), contactPerson.trim(), vehicleNumber.trim(), status)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingTransport != null) "Save Changes" else "Add Transport", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        )
                     }
                 }
             }
         }
     }
 }
+

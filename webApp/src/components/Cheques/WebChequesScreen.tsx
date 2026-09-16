@@ -5,7 +5,12 @@ import { DeleteChequeDialog } from './DeleteChequeDialog';
 import { supabase } from '../../lib/supabase';
 import './Cheques.css';
 
-export const WebChequesScreen: React.FC = () => {
+interface WebChequesScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebChequesScreen: React.FC<WebChequesScreenProps> = ({ userRole }) => {
+  const [role, setRole] = useState<string>(userRole ? String(userRole).toUpperCase() : 'STAFF');
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [directionFilter, setDirectionFilter] = useState('All');
@@ -62,8 +67,27 @@ export const WebChequesScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('users').select('role').eq('id', user.id).single();
+          if (data?.role) {
+            setRole(String(data.role).toUpperCase());
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (userRole) {
+      setRole(String(userRole).toUpperCase());
+    } else {
+      fetchUserRole();
+    }
     loadChequesFromSupabase();
-  }, []);
+  }, [userRole]);
 
 
   console.log('Loading state:', isLoading);
@@ -492,11 +516,13 @@ export const WebChequesScreen: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
-                        <button className="action-btn-icon delete" onClick={() => handleDeleteClick(cheque)} title="Delete Cheque">
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {role === 'ADMIN' && (
+                          <button className="action-btn-icon delete" onClick={() => handleDeleteClick(cheque)} title="Delete Cheque">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -599,6 +625,7 @@ export const WebChequesScreen: React.FC = () => {
         <DeleteChequeDialog
           isOpen={deletingCheque !== null}
           cheque={deletingCheque}
+          userRole={role}
           onClose={() => setDeletingCheque(null)}
           onConfirm={handleConfirmDelete}
         />

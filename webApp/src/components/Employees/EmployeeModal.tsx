@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { WebEmployee } from '../../types/employees';
 import { supabase } from '../../lib/supabase';
+import { getSignedPhotoUrl, compressImageForUpload } from '../../utils/photoUtils';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -21,7 +22,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('Staff');
   const [salaryType, setSalaryType] = useState<'Monthly' | 'Per Day'>('Monthly');
-  const [salary, setSalary] = useState<number | ''>(25000);
+  const [salary, setSalary] = useState<number | ''>('');
   const [address, setAddress] = useState('');
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
@@ -30,6 +31,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [joinedOn, setJoinedOn] = useState(new Date().toISOString().split('T')[0]);
   const [leftOn, setLeftOn] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [remark, setRemark] = useState('');
   const [status, setStatus] = useState<'Active' | 'Inactive'>('Active');
@@ -44,7 +46,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setEmail(editingEmployee.email || '');
       setRole(editingEmployee.role || 'Staff');
       setSalaryType(editingEmployee.salaryType || 'Monthly');
-      setSalary(editingEmployee.salary ?? 25000);
+      setSalary(editingEmployee.salary !== undefined && editingEmployee.salary !== null ? editingEmployee.salary : '');
       setAddress(editingEmployee.address || '');
       setBankName(editingEmployee.bankName || '');
       setBankAccount(editingEmployee.bankAccount || '');
@@ -62,7 +64,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setEmail('');
       setRole('Staff');
       setSalaryType('Monthly');
-      setSalary(25000);
+      setSalary('');
       setAddress('');
       setBankName('');
       setBankAccount('');
@@ -79,6 +81,18 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setPhotoUploading(false);
   }, [editingEmployee, isOpen]);
 
+  useEffect(() => {
+    if (photoUrl) {
+      if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:') || photoUrl.startsWith('http')) {
+        setPhotoPreview(photoUrl);
+      } else {
+        getSignedPhotoUrl(photoUrl).then((url) => setPhotoPreview(url));
+      }
+    } else {
+      setPhotoPreview(null);
+    }
+  }, [photoUrl]);
+
   if (!isOpen) return null;
 
   const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,70 +101,39 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
     try {
       setPhotoUploading(true);
-      // Try uploading to Supabase Storage bucket first
-      const fileExt = file.name.split('.').pop();
-      const fileName = `emp_${Date.now()}.${fileExt}`;
-      const filePath = `employees/${fileName}`;
+      setErrorMsg('');
 
-      const { data, error } = await supabase.storage
-        .from('employee_photos')
-        .upload(filePath, file);
+      // Get authenticated business ID or fallback
+      const { data: memberData } = await supabase
+        .from('business_members')
+        .select('business_id')
+        .limit(1)
+        .single();
+      const businessId = memberData?.business_id || '00000000-0000-0000-0000-000000000001';
 
-      if (!error && data) {
-        const { data: pubData } = supabase.storage
-          .from('employee_photos')
-          .getPublicUrl(filePath);
-        if (pubData?.publicUrl) {
-          setPhotoUrl(pubData.publicUrl);
-          setPhotoUploading(false);
-          return;
-        }
+      // Compress / resize image client-side so it never exceeds bucket size limits
+      const compressedBlob = await compressImageForUpload(file, 800, 0.85);
+      const fileName = `emp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+      const filePath = `${businessId}/employees/${fileName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('customer_photos')
+        .upload(filePath, compressedBlob, { cacheControl: '3600', upsert: true, contentType: 'image/jpeg' });
+
+      if (uploadErr) {
+        console.error('Storage upload error:', uploadErr);
+        setErrorMsg(`Photo upload failed: ${uploadErr.message}`);
+        setPhotoUploading(false);
+        return;
       }
 
-      // FileReader + Canvas Compression fallback (prevents huge base64 payloads)
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const maxDim = 250;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > maxDim) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            }
-          } else {
-            if (height > maxDim) {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const compressedUrl = canvas.toDataURL('image/jpeg', 0.75);
-            setPhotoUrl(compressedUrl);
-          } else {
-            setPhotoUrl(event.target?.result as string || '');
-          }
-          setPhotoUploading(false);
-        };
-        img.onerror = () => {
-          setPhotoUrl(event.target?.result as string || '');
-          setPhotoUploading(false);
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.onerror = () => setPhotoUploading(false);
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.warn('Photo processing warning:', err);
+      setPhotoUrl(filePath);
+      const signed = await getSignedPhotoUrl(filePath);
+      setPhotoPreview(signed);
+    } catch (err: any) {
+      console.error('Photo processing error:', err);
+      setErrorMsg(`Photo upload failed: ${err?.message || 'Unknown error'}`);
+    } finally {
       setPhotoUploading(false);
     }
   };
@@ -224,8 +207,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           {/* PHOTO THUMBNAIL & FILE UPLOAD */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
             <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', fontWeight: 800, overflow: 'hidden', flexShrink: 0 }}>
-              {photoUrl ? (
-                <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {photoPreview || photoUrl ? (
+                <img src={photoPreview || photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 name ? name.charAt(0).toUpperCase() : '📷'
               )}

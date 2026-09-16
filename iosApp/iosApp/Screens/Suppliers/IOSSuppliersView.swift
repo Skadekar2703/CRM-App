@@ -39,14 +39,7 @@ struct IOSSuppliersContentView: View {
         isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
     }
 
-    @State private var suppliers: [IOSSupplierItem] = [
-        IOSSupplierItem(id: "SUP-001", partyName: "Acme Global Supplies", contactPerson: "Jane Doe", mobile: "+1 (555) 123-4567", email: "jane@acmeglobal.com", address: "Industrial Area, Phase 2", status: "Active"),
-        IOSSupplierItem(id: "SUP-002", partyName: "Nexus Logistics Inc.", contactPerson: "Michael Chen", mobile: "+1 (555) 987-6543", email: "mchen@nexuslogistics.com", address: "Central Freight Terminal, Bay 4", status: "Inactive"),
-        IOSSupplierItem(id: "SUP-003", partyName: "Vardhman Textiles Ltd.", contactPerson: "Rajesh Sharma", mobile: "+91 98765 43210", email: "rajesh@vardhman.com", address: "Ring Road, Surat", status: "Active"),
-        IOSSupplierItem(id: "SUP-004", partyName: "Supreme Hardware Co.", contactPerson: "Anil Verma", mobile: "+91 98111 22334", email: "contact@supremehardware.in", address: "GIDC Market, Ahmedabad", status: "Active"),
-        IOSSupplierItem(id: "SUP-005", partyName: "Apex Packaging Solutions", contactPerson: "Sarah Jenkins", mobile: "+1 (555) 456-7890", email: "sarah@apexpack.com", address: "Logistics Hub, Block B", status: "Inactive"),
-        IOSSupplierItem(id: "SUP-006", partyName: "Global Polymers & Fibers", contactPerson: "Vikram Patel", mobile: "+91 97654 32109", email: "vikram@globalpolymers.com", address: "MIDC Industrial Estate, Mumbai", status: "Active")
-    ]
+    @State private var suppliers: [IOSSupplierItem] = []
 
     @State private var searchQuery = ""
     @State private var selectedStatusFilter = "All"
@@ -56,6 +49,31 @@ struct IOSSuppliersContentView: View {
     @State private var deletingSupplier: IOSSupplierItem? = nil
     @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
+
+    func fetchSuppliers() {
+        SupabaseIOSClient.shared.fetchTable(table: "suppliers") { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let items):
+                    if !items.isEmpty {
+                        self.suppliers = items.map { item in
+                            IOSSupplierItem(
+                                id: item["id"] as? String ?? UUID().uuidString,
+                                partyName: item["name"] as? String ?? item["party_name"] as? String ?? "Supplier",
+                                contactPerson: item["company"] as? String ?? item["contact_person"] as? String ?? "",
+                                mobile: item["phone"] as? String ?? item["mobile"] as? String ?? "",
+                                email: item["email"] as? String ?? "",
+                                address: item["area"] as? String ?? item["address"] as? String ?? "",
+                                status: item["status"] as? String ?? "Active"
+                            )
+                        }
+                    }
+                case .failure:
+                    break
+                }
+            }
+        }
+    }
 
     var filteredSuppliers: [IOSSupplierItem] {
         suppliers.filter { s in
@@ -177,6 +195,9 @@ struct IOSSuppliersContentView: View {
             .padding(.trailing, 20)
             .padding(.bottom, 20)
         }
+        .onAppear {
+            fetchSuppliers()
+        }
         .sheet(isPresented: $showFilterSheet) {
             IOSSupplierFilterSheet(
                 selectedStatus: $selectedStatusFilter,
@@ -187,7 +208,21 @@ struct IOSSuppliersContentView: View {
             IOSSupplierFormSheet(
                 supplier: editingSupplier,
                 onSave: { party, contact, mob, em, addr, st in
+                    let payload: [String: Any] = [
+                        "name": party,
+                        "company": contact,
+                        "phone": mob,
+                        "email": em,
+                        "area": addr,
+                        "status": st
+                    ]
                     if let target = editingSupplier {
+                        let isUuid = target.id.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil
+                        if isUuid {
+                            SupabaseIOSClient.shared.updateRecord(table: "suppliers", id: target.id, payload: payload) { _ in
+                                self.fetchSuppliers()
+                            }
+                        }
                         if let idx = suppliers.firstIndex(where: { $0.id == target.id }) {
                             suppliers[idx].partyName = party
                             suppliers[idx].contactPerson = contact
@@ -198,6 +233,9 @@ struct IOSSuppliersContentView: View {
                         }
                         toastMsg = "Supplier '\(party)' updated."
                     } else {
+                        SupabaseIOSClient.shared.insertRecord(table: "suppliers", payload: payload) { _ in
+                            self.fetchSuppliers()
+                        }
                         let newSup = IOSSupplierItem(
                             id: "SUP-00\(suppliers.count + 1)",
                             partyName: party,
@@ -214,18 +252,24 @@ struct IOSSuppliersContentView: View {
                 }
             )
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Supplier"),
-                message: Text("Are you sure you want to delete '\(deletingSupplier?.partyName ?? "")'?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deletingSupplier {
-                        suppliers.removeAll(where: { $0.id == target.id })
-                        toastMsg = "Supplier deleted"
+        .sheet(isPresented: $showDeleteAlert) {
+            if let target = deletingSupplier {
+                IOSThreeStepDeleteSheet(
+                    itemName: target.partyName,
+                    itemDetails: "ID: \(target.id), Phone: \(target.mobile)",
+                    userRole: "ADMIN",
+                    onConfirmDelete: {
+                        let isUuid = target.id.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil
+                        if isUuid {
+                            SupabaseIOSClient.shared.deleteRecord(table: "suppliers", id: target.id) { _ in
+                                self.fetchSuppliers()
+                            }
+                        }
+                        self.suppliers.removeAll(where: { $0.id == target.id })
+                        toastMsg = "Supplier '\(target.partyName)' deleted."
                     }
-                },
-                secondaryButton: .cancel()
-            )
+                )
+            }
         }
     }
 }

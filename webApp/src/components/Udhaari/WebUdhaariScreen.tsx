@@ -63,7 +63,12 @@ const UdhaariCustomerAvatar: React.FC<{ photoUrl?: string | null; name: string; 
   );
 };
 
-export const WebUdhaariScreen: React.FC = () => {
+interface WebUdhaariScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebUdhaariScreen: React.FC<WebUdhaariScreenProps> = ({ userRole }) => {
+  const [role, setRole] = useState<string>(userRole ? String(userRole).toUpperCase() : 'STAFF');
   const [customers, setCustomers] = useState<UdhaariCustomer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -147,8 +152,27 @@ export const WebUdhaariScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('users').select('role').eq('id', user.id).single();
+          if (data?.role) {
+            setRole(String(data.role).toUpperCase());
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (userRole) {
+      setRole(String(userRole).toUpperCase());
+    } else {
+      fetchUserRole();
+    }
     loadDataFromSupabase();
-  }, []);
+  }, [userRole]);
 
   // CALCULATED SUMMARIES (Accounting Formula: SUM across all customers)
   const totalBaki = useMemo(() => {
@@ -658,15 +682,17 @@ export const WebUdhaariScreen: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
-                        <button
-                          className="action-btn-icon delete"
-                          onClick={() => handleDeleteCustomerClick(customer)}
-                          title="Delete Customer"
-                        >
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {role === 'ADMIN' && (
+                          <button
+                            className="action-btn-icon delete"
+                            onClick={() => handleDeleteCustomerClick(customer)}
+                            title="Delete Customer"
+                          >
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -794,6 +820,7 @@ export const WebUdhaariScreen: React.FC = () => {
         <UdhaariHistoryModal
           isOpen={isHistoryModalOpen}
           customer={historyCustomer}
+          userRole={role}
           onClose={() => setIsHistoryModalOpen(false)}
           onRefresh={loadDataFromSupabase}
         />
@@ -801,6 +828,7 @@ export const WebUdhaariScreen: React.FC = () => {
         <DeleteUdhaariDialog
           isOpen={deletingCustomer !== null}
           customer={deletingCustomer}
+          userRole={role}
           onClose={() => setDeletingCustomer(null)}
           onConfirm={handleConfirmDelete}
         />

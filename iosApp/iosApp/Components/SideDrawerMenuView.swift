@@ -23,7 +23,6 @@ struct SideDrawerMenuView: View {
         ("Reminders", "Reminders", false),
         ("Daag", "Daag", false),
         ("Users", "Users", true),
-        ("Settings", "Settings", false),
         ("Dark Theme", "Dark Theme", false),
         ("Logout", "Logout", false)
     ]

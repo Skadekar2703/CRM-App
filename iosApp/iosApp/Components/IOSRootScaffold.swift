@@ -9,7 +9,6 @@ struct IOSRootScaffold<Content: View>: View {
 
     @State private var showSideDrawer = false
     @State private var showProfileMenu = false
-    @State private var showAiSheet = false
 
     @AppStorage("crm_is_dark_mode") private var isDarkMode = false
 
@@ -18,7 +17,6 @@ struct IOSRootScaffold<Content: View>: View {
     }
     private var textMuted = Color(red: 100/255, green: 116/255, blue: 139/255)
     private var primaryBlue = Color(red: 37/255, green: 99/255, blue: 235/255)
-    private var purpleBg = Color(red: 124/255, green: 58/255, blue: 237/255)
     private var bgLight: Color {
         isDarkMode ? Color(red: 11/255, green: 15/255, blue: 25/255) : Color(red: 248/255, green: 250/255, blue: 252/255)
     }
@@ -28,7 +26,6 @@ struct IOSRootScaffold<Content: View>: View {
             VStack(spacing: 0) {
                 // UNIFIED TOP APP BAR ON EVERY SINGLE IOS SCREEN
                 HStack {
-                    // TOP LEFT: HAMBURGER MENU BUTTON
                     Button(action: {
                         withAnimation { showSideDrawer.toggle() }
                     }) {
@@ -37,45 +34,44 @@ struct IOSRootScaffold<Content: View>: View {
                             .foregroundColor(textPrimary)
                     }
 
-                    CRMLogoView(size: 34, fontSize: 12)
-                        .padding(.leading, 4)
-
-                    Text(activeSection == "Dashboard" ? "CRM Dashboard" : activeSection)
-                        .font(.title3)
+                    Text("CRM")
+                        .font(.headline)
                         .fontWeight(.bold)
+                        .foregroundColor(primaryBlue)
+
+                    Text("•")
+                        .foregroundColor(textMuted)
+
+                    Text(activeSection)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
                         .foregroundColor(textPrimary)
-                        .padding(.leading, 4)
 
                     Spacer()
 
-                    // TOP RIGHT: NOTIFICATION BELL & PROFILE AVATAR
-                    Image(systemName: "bell.fill")
-                        .font(.subheadline)
-                        .foregroundColor(textMuted)
-
-                    Menu {
-                        Text(userSession?.username ?? "Admin User")
-                            .font(.headline)
-                        if let email = userSession?.email {
-                            Text(email)
-                                .font(.caption)
+                    Button(action: { showProfileMenu.toggle() }) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(primaryBlue)
+                    }
+                    .popover(isPresented: $showProfileMenu) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(userSession?.displayName ?? "User")
+                                .font(.headline)
+                            if let email = userSession?.email {
+                                Text(email)
+                                    .font(.caption)
+                                    .foregroundColor(textMuted)
+                            }
+                            Divider()
+                            Button("Sign Out") {
+                                showProfileMenu = false
+                                onLogout()
+                            }
+                            .foregroundColor(.red)
+                            .fontWeight(.bold)
                         }
-                        Divider()
-                        Button(role: .destructive, action: onLogout) {
-                            Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(primaryBlue.opacity(0.12))
-                                .frame(width: 36, height: 36)
-                                .overlay(Circle().stroke(primaryBlue.opacity(0.3), lineWidth: 1))
-
-                            Text(String((userSession?.username ?? userSession?.email ?? "Admin").prefix(1)).uppercased())
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundColor(primaryBlue)
-                        }
+                        .padding()
                     }
                 }
                 .padding(.horizontal, 16)
@@ -84,28 +80,16 @@ struct IOSRootScaffold<Content: View>: View {
                 .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 2)
 
                 // SCREEN CONTENT PLACED STRICTLY BELOW TOP BAR
-                ZStack(alignment: .bottomTrailing) {
+                ZStack(alignment: .topLeading) {
                     bgLight.ignoresSafeArea()
                     content()
-
-                    // GLOBAL FLOATING BOTTOM-RIGHT AI ASSISTANT BUTTON ON EVERY IOS SCREEN
-                    Button(action: { showAiSheet = true }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "sparkles")
-                                .font(.subheadline)
-                            Text("AI Assistant")
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(purpleBg)
-                        .clipShape(Capsule())
-                        .shadow(color: purpleBg.opacity(0.4), radius: 6, x: 0, y: 3)
-                    }
-                    .padding(20)
                 }
+
+                // BOTTOM NAVIGATION BAR (FIXED AT BOTTOM FOR ALL SCREENS)
+                IOSBottomNavigationBar(
+                    activeSection: activeSection,
+                    onNavigateSection: onNavigateSection
+                )
             }
 
             // SIDE DRAWER OVERLAY FOR ALL CRM MODULES
@@ -134,9 +118,6 @@ struct IOSRootScaffold<Content: View>: View {
                 )
                 .transition(.move(edge: .leading))
             }
-        }
-        .sheet(isPresented: $showAiSheet) {
-            IOSAiChatSheet()
         }
     }
 }

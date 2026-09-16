@@ -14,7 +14,7 @@ struct IOSSupplierLedgerView: View {
 }
 
 struct IOSSupplierOverviewItem: Identifiable {
-    let id: String
+    var id: String
     var name: String
     var opening: Double
     var purchases: Double
@@ -24,7 +24,7 @@ struct IOSSupplierOverviewItem: Identifiable {
 }
 
 struct IOSLedgerEntryItem: Identifiable {
-    let id: String
+    var id: String
     var supplierId: String
     var supplierName: String
     var date: String
@@ -36,70 +36,10 @@ struct IOSLedgerEntryItem: Identifiable {
 }
 
 struct IOSSupplierLedgerContentView: View {
-    @State private var suppliers: [(id: String, name: String)] = [
-        ("SUP-101", "Metro Cash & Carry"),
-        ("SUP-102", "Sharma Wholesale"),
-        ("SUP-103", "Vardhman Fabrics"),
-        ("SUP-104", "Garg Distributers")
-    ]
-
-    @State private var entries: [IOSLedgerEntryItem] = [
-        IOSLedgerEntryItem(
-            id: "SLE-101",
-            supplierId: "SUP-101",
-            supplierName: "Metro Cash & Carry",
-            date: "01 Jun 2026",
-            transactionType: "Opening Balance",
-            amount: 0.0,
-            reference: "OB-001",
-            paymentMode: "Cash",
-            description: "Initial balance"
-        ),
-        IOSLedgerEntryItem(
-            id: "SLE-102",
-            supplierId: "SUP-102",
-            supplierName: "Sharma Wholesale",
-            date: "15 Jun 2026",
-            transactionType: "Purchase",
-            amount: 45000.0,
-            reference: "INV-9821",
-            paymentMode: "Cash",
-            description: "Bulk Basmati Rice 25kg stock purchase"
-        ),
-        IOSLedgerEntryItem(
-            id: "SLE-103",
-            supplierId: "SUP-102",
-            supplierName: "Sharma Wholesale",
-            date: "20 Jun 2026",
-            transactionType: "Payment",
-            amount: 20000.0,
-            reference: "PAY-4412",
-            paymentMode: "Bank Transfer",
-            description: "Part payment via RTGS"
-        ),
-        IOSLedgerEntryItem(
-            id: "SLE-104",
-            supplierId: "SUP-103",
-            supplierName: "Vardhman Fabrics",
-            date: "10 Jul 2026",
-            transactionType: "Purchase",
-            amount: 32000.0,
-            reference: "INV-1042",
-            paymentMode: "Cash",
-            description: "Cotton fabric rolls purchase"
-        ),
-        IOSLedgerEntryItem(
-            id: "SLE-105",
-            supplierId: "SUP-103",
-            supplierName: "Vardhman Fabrics",
-            date: "12 Jul 2026",
-            transactionType: "Return",
-            amount: 4000.0,
-            reference: "RET-004",
-            paymentMode: "Cash",
-            description: "Damaged fabric roll return"
-        )
-    ]
+    @State private var suppliers: [(id: String, name: String)] = []
+    @State private var entries: [IOSLedgerEntryItem] = []
+    @State private var isLoadingSuppliers = false
+    @State private var suppliersError: String? = nil
 
     @State private var selectedSupplierId: String? = nil
     @State private var searchQuery = ""
@@ -108,6 +48,54 @@ struct IOSSupplierLedgerContentView: View {
     @State private var deletingEntry: IOSLedgerEntryItem? = nil
     @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
+
+    private var cardBg: Color { Color.white }
+    private var bgApp: Color { Color(red: 248/255, green: 250/255, blue: 252/255) }
+
+    func fetchSuppliers() {
+        isLoadingSuppliers = true
+        suppliersError = nil
+        SupabaseIOSClient.shared.fetchTable(table: "suppliers") { result in
+            DispatchQueue.main.async {
+                self.isLoadingSuppliers = false
+                switch result {
+                case .success(let items):
+                    self.suppliers = items.map { item in
+                        let id = item["id"] as? String ?? UUID().uuidString
+                        let name = item["name"] as? String ?? item["party_name"] as? String ?? "Supplier"
+                        return (id: id, name: name)
+                    }
+                case .failure(let err):
+                    self.suppliersError = err.localizedDescription
+                }
+            }
+        }
+    }
+
+    func fetchLedger() {
+        SupabaseIOSClient.shared.fetchTable(table: "supplier_ledger") { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let items):
+                    self.entries = items.map { item in
+                        IOSLedgerEntryItem(
+                            id: item["id"] as? String ?? UUID().uuidString,
+                            supplierId: item["supplier_id"] as? String ?? "",
+                            supplierName: item["supplier_name"] as? String ?? "Supplier",
+                            date: item["date"] as? String ?? "29 Aug 2026",
+                            transactionType: item["transaction_type"] as? String ?? "Purchase",
+                            amount: (item["amount"] as? NSNumber)?.doubleValue ?? (Double(item["amount"] as? String ?? "0") ?? 0.0),
+                            reference: item["reference"] as? String ?? "",
+                            paymentMode: item["payment_mode"] as? String ?? "Cash",
+                            description: item["notes"] as? String ?? item["description"] as? String ?? ""
+                        )
+                    }
+                case .failure:
+                    break
+                }
+            }
+        }
+    }
 
     var overviews: [IOSSupplierOverviewItem] {
         suppliers.map { sup in
@@ -152,154 +140,165 @@ struct IOSSupplierLedgerContentView: View {
             VStack(spacing: 14) {
                 // SUMMARY CARDS ROW
                 HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TOTAL PAYABLE")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TOTAL PAYABLE (WE OWE)")
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.red)
                         Text("₹\(Int(totalPayable))")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(.red)
+                        Text("Amount owed to suppliers")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
                     }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, minHeight: 85, alignment: .leading)
                     .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("SUPPLIERS")
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.blue)
                         Text("\(suppliers.count)")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(.blue)
+                        Text("Total registered")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
                     }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, minHeight: 85, alignment: .leading)
                     .background(cardBg)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 12)
 
-                // SELECT SUPPLIER HEADER & BACK BUTTON
-                HStack {
-                    if selectedSupplierId != null {
+                // SEARCH BAR & MODE CONTROLS
+                HStack(spacing: 10) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.gray)
+                        TextField("Search supplier...", text: $searchQuery)
+                    }
+                    .padding(10)
+                    .background(cardBg)
+                    .cornerRadius(10)
+
+                    if selectedSupplierId != nil {
                         Button(action: { selectedSupplierId = nil }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                Text("All Suppliers")
-                            }
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.blue)
-                        }
-                    } else {
-                        Text("All Suppliers — Payable Overview")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                    }
-
-                    Spacer()
-
-                    Button(action: {
-                        editingEntry = nil
-                        showFormSheet = true
-                    }) {
-                        Text("+ Add Entry")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                    }
-                }
-                .padding(.horizontal, 16)
-
-                // SEARCH BAR
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    TextField("Search supplier name or ID...", text: $searchQuery)
-                    if !searchQuery.isEmpty {
-                        Button(action: { searchQuery = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                }
-                .padding(10)
-                .background(Color.white)
-                .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
-                .padding(.horizontal, 16)
-
-                if let msg = toastMsg {
-                    Text("✓ \(msg)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.green)
-                        .padding(10)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(red: 240/255, green: 253/255, blue: 244/255))
-                        .cornerRadius(8)
-                        .padding(.horizontal, 16)
-                }
-
-                // CONTENT
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if selectedSupplierId == nil {
-                            ForEach(filteredOverviews) { overview in
-                                IOSSupplierOverviewCard(
-                                    overview: overview,
-                                    onViewLedger: { selectedSupplierId = overview.id }
-                                )
-                            }
-                        } else {
-                            let currentSupName = suppliers.find { $0.id == selectedSupplierId }?.name ?? "Supplier"
-                            Text("Detailed Ledger for \(currentSupName)")
+                            Text("Overview")
                                 .font(.caption)
                                 .fontWeight(.bold)
-                                .foregroundColor(.blue)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color.gray.opacity(0.2))
+                                .foregroundColor(.primary)
+                                .cornerRadius(8)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
 
-                            if selectedSupplierEntries.isEmpty {
-                                Text("No transactions recorded.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                    .padding(.top, 20)
-                            } else {
-                                ForEach(selectedSupplierEntries) { entry in
-                                    IOSLedgerEntryCard(
-                                        entry: entry,
-                                        onEdit: {
-                                            editingEntry = entry
-                                            showFormSheet = true
-                                        },
-                                        onDelete: {
-                                            deletingEntry = entry
-                                            showDeleteAlert = true
-                                        }
+                // TOAST MESSAGE
+                if let msg = toastMsg {
+                    Text(msg)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(20)
+                }
+
+                // MAIN LIST CONTENT
+                if selectedSupplierId == nil {
+                    if filteredOverviews.isEmpty {
+                        VStack(spacing: 8) {
+                            Text("No supplier ledger activity found.")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(filteredOverviews) { overview in
+                                    IOSSupplierOverviewCard(
+                                        overview: overview,
+                                        onViewLedger: { selectedSupplierId = overview.id }
                                     )
                                 }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 80)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 80)
+                } else {
+                    let selectedSupName = suppliers.first(where: { $0.id == selectedSupplierId })?.name ?? "Supplier"
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Button(action: { selectedSupplierId = nil }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Back")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                            }
+                            Spacer()
+                            Text(selectedSupName)
+                                .font(.headline)
+                                .fontWeight(.bold)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+
+                        if selectedSupplierEntries.isEmpty {
+                            VStack(spacing: 8) {
+                                Text("No entries recorded for \(selectedSupName).")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            ScrollView {
+                                LazyVStack(spacing: 10) {
+                                    ForEach(selectedSupplierEntries) { entry in
+                                        IOSLedgerEntryCard(
+                                            entry: entry,
+                                            onEdit: {
+                                                editingEntry = entry
+                                                fetchSuppliers()
+                                                showFormSheet = true
+                                            },
+                                            onDelete: {
+                                                deletingEntry = entry
+                                                showDeleteAlert = true
+                                            }
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 80)
+                            }
+                        }
+                    }
                 }
             }
 
             // FAB ADD BUTTON
             Button(action: {
+                fetchSuppliers()
                 editingEntry = nil
                 showFormSheet = true
             }) {
@@ -314,35 +313,42 @@ struct IOSSupplierLedgerContentView: View {
             }
             .padding(20)
         }
+        .onAppear {
+            fetchSuppliers()
+            fetchLedger()
+        }
         .sheet(isPresented: $showFormSheet) {
             IOSSupplierLedgerFormSheet(
                 entry: editingEntry,
                 suppliers: suppliers,
+                isLoadingSuppliers: isLoadingSuppliers,
+                suppliersError: suppliersError,
                 onSave: { supId, supName, date, type, amount, ref, mode, desc in
-                    if let target = editingEntry, let idx = entries.firstIndex(where: { $0.id == target.id }) {
-                        entries[idx].supplierId = supId
-                        entries[idx].supplierName = supName
-                        entries[idx].date = date
-                        entries[idx].transactionType = type
-                        entries[idx].amount = amount
-                        entries[idx].reference = ref
-                        entries[idx].paymentMode = mode
-                        entries[idx].description = desc
-                        toastMsg = "Ledger entry for '\(supName)' updated"
+                    let payload: [String: Any] = [
+                        "supplier_id": supId,
+                        "supplier_name": supName,
+                        "date": date,
+                        "transaction_type": type,
+                        "amount": amount,
+                        "reference": ref,
+                        "payment_mode": mode,
+                        "notes": desc
+                    ]
+
+                    if let target = editingEntry {
+                        SupabaseIOSClient.shared.updateRecord(table: "supplier_ledger", id: target.id, payload: payload) { _ in
+                            DispatchQueue.main.async {
+                                self.fetchLedger()
+                                self.toastMsg = "Ledger entry for '\(supName)' updated"
+                            }
+                        }
                     } else {
-                        let newE = IOSLedgerEntryItem(
-                            id: "SLE-\(100 + entries.count + 1)",
-                            supplierId: supId,
-                            supplierName: supName,
-                            date: date,
-                            transactionType: type,
-                            amount: amount,
-                            reference: ref,
-                            paymentMode: mode,
-                            description: desc
-                        )
-                        entries.insert(newE, at: 0)
-                        toastMsg = "Ledger entry for '\(supName)' recorded"
+                        SupabaseIOSClient.shared.insertRecord(table: "supplier_ledger", payload: payload) { _ in
+                            DispatchQueue.main.async {
+                                self.fetchLedger()
+                                self.toastMsg = "Ledger entry for '\(supName)' recorded"
+                            }
+                        }
                     }
                     showFormSheet = false
                 }
@@ -354,8 +360,12 @@ struct IOSSupplierLedgerContentView: View {
                 message: Text("Are you sure you want to delete entry for '\(deletingEntry?.supplierName ?? "")' (₹\(Int(deletingEntry?.amount ?? 0)))?"),
                 primaryButton: .destructive(Text("Delete")) {
                     if let target = deletingEntry {
-                        entries.removeAll { $0.id == target.id }
-                        toastMsg = "Ledger entry deleted"
+                        SupabaseIOSClient.shared.deleteRecord(table: "supplier_ledger", id: target.id) { _ in
+                            DispatchQueue.main.async {
+                                self.fetchLedger()
+                                self.toastMsg = "Ledger entry deleted"
+                            }
+                        }
                     }
                 },
                 secondaryButton: .cancel()
@@ -376,7 +386,8 @@ struct IOSSupplierOverviewCard: View {
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                    Text("ID: \(overview.id)")
+                    let shortId = overview.id.count > 16 ? String(overview.id.prefix(8)) + "..." + String(overview.id.suffix(4)) : overview.id
+                    Text("ID: \(shortId)")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -505,10 +516,12 @@ struct IOSLedgerEntryCard: View {
 struct IOSSupplierLedgerFormSheet: View {
     var entry: IOSLedgerEntryItem?
     var suppliers: [(id: String, name: String)]
+    var isLoadingSuppliers: Bool = false
+    var suppliersError: String? = nil
     var onSave: (String, String, String, String, Double, String, String, String) -> Void
 
     @Environment(\.presentationMode) var presentationMode
-    @State private var selectedSupId = "SUP-101"
+    @State private var selectedSupId = ""
     @State private var date = "29 Aug 2026"
     @State private var type = "Purchase"
     @State private var amount = ""
@@ -519,10 +532,18 @@ struct IOSSupplierLedgerFormSheet: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Supplier")) {
-                    Picker("Select Supplier", selection: $selectedSupId) {
-                        ForEach(suppliers, id: \.id) { sup in
-                            Text("\(sup.name) (\(sup.id))").tag(sup.id)
+                Section(header: Text("Select Supplier *")) {
+                    if isLoadingSuppliers {
+                        Text("Loading suppliers...").foregroundColor(.gray)
+                    } else if let err = suppliersError {
+                        Text("Unable to load suppliers (\(err))").foregroundColor(.red)
+                    } else if suppliers.isEmpty {
+                        Text("No suppliers available").foregroundColor(.orange)
+                    } else {
+                        Picker("Supplier", selection: $selectedSupId) {
+                            ForEach(suppliers, id: \.id) { sup in
+                                Text("\(sup.name) (\(sup.id.prefix(8)))").tag(sup.id)
+                            }
                         }
                     }
                 }
@@ -560,7 +581,7 @@ struct IOSSupplierLedgerFormSheet: View {
                     let amt = Double(amount) ?? 0.0
                     let supName = suppliers.first(where: { $0.id == selectedSupId })?.name ?? "Supplier"
                     onSave(selectedSupId, supName, date, type, amt, reference, paymentMode, description)
-                }.disabled(date.trimmingCharacters(in: .whitespaces).isEmpty || (Double(amount) ?? -1) < 0)
+                }.disabled(selectedSupId.isEmpty || date.trimmingCharacters(in: .whitespaces).isEmpty || (Double(amount) ?? -1) < 0 || isLoadingSuppliers || suppliers.isEmpty)
             )
             .onAppear {
                 if let e = entry {
@@ -571,6 +592,8 @@ struct IOSSupplierLedgerFormSheet: View {
                     reference = e.reference
                     paymentMode = e.paymentMode
                     description = e.description
+                } else if selectedSupId.isEmpty, let first = suppliers.first {
+                    selectedSupId = first.id
                 }
             }
         }

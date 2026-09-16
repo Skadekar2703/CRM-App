@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct IOSEmployeesView: View {
     var onNavigateSection: (String) -> Void = { _ in }
@@ -83,86 +84,16 @@ struct IOSEmployeesContentView: View {
     private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
     private var textMuted: Color { Color(red: 100/255, green: 116/255, blue: 139/255) }
 
-    @State private var employees: [IOSEmployeeItem] = [
-        IOSEmployeeItem(
-            id: "1",
-            uid: "EMP-101",
-            name: "Ramesh Kumar",
-            role: "Senior Sales Exec",
-            mobile: "+91 98765 43210",
-            email: "ramesh@crm.com",
-            address: "Sector 14, Industrial Area",
-            bankName: "HDFC Bank",
-            bankAccount: "501002345678",
-            idNumber: "AADH-9876-1234",
-            emergencyContact: "+91 98111 22233",
-            joinedOn: Calendar.current.date(byAdding: .month, value: -14, to: Date()) ?? Date(),
-            leftOn: nil,
-            photoUrl: "",
-            remark: "Reliable team leader",
-            activeDays: 420,
-            salary: 35000.0,
-            salaryType: "Monthly",
-            udhaarBalance: 12500.0,
-            ctcYtd: 420000.0,
-            status: "Active"
-        ),
-        IOSEmployeeItem(
-            id: "2",
-            uid: "EMP-102",
-            name: "Suresh Tiwari",
-            role: "Delivery Partner",
-            mobile: "+91 87654 32109",
-            email: "suresh@crm.com",
-            address: "Main Market Road",
-            bankName: "SBI",
-            bankAccount: "30291827364",
-            idNumber: "CNIC-4433-2211",
-            emergencyContact: "+91 87000 11122",
-            joinedOn: Calendar.current.date(byAdding: .month, value: -6, to: Date()) ?? Date(),
-            leftOn: nil,
-            photoUrl: "",
-            remark: "Shift driver",
-            activeDays: 180,
-            salary: 850.0,
-            salaryType: "Per Day",
-            udhaarBalance: 4200.0,
-            ctcYtd: 180000.0,
-            status: "Active"
-        ),
-        IOSEmployeeItem(
-            id: "3",
-            uid: "EMP-103",
-            name: "Anita Desai",
-            role: "Store Manager",
-            mobile: "+91 76543 21098",
-            email: "anita@crm.com",
-            address: "Civil Lines",
-            bankName: "ICICI Bank",
-            bankAccount: "001122334455",
-            idNumber: "PAN-ABCDE1234F",
-            emergencyContact: "+91 99887 76655",
-            joinedOn: Calendar.current.date(byAdding: .year, value: -2, to: Date()) ?? Date(),
-            leftOn: nil,
-            photoUrl: "",
-            remark: "Operations head",
-            activeDays: 730,
-            salary: 50000.0,
-            salaryType: "Monthly",
-            udhaarBalance: 0.0,
-            ctcYtd: 600000.0,
-            status: "Active"
-        )
-    ]
-
+    @State private var employees: [IOSEmployeeItem] = []
     @State private var transactions: [IOSEmployeeTransactionItem] = []
+    @State private var isLoading: Bool = true
 
     @State private var searchQuery = ""
     @State private var showFormSheet = false
     @State private var editingEmployee: IOSEmployeeItem? = nil
     @State private var deletingEmployee: IOSEmployeeItem? = nil
     @State private var selectedDetailEmployee: IOSEmployeeItem? = nil
-    @State private var showDeleteAlert = false
+    @State private var userRole: String = "STAFF"
 
     // Transaction Sheet
     @State private var showTxSheet = false
@@ -181,6 +112,109 @@ struct IOSEmployeesContentView: View {
 
     var totalOutstanding: Double {
         employees.reduce(0) { $0 + $1.udhaarBalance }
+    }
+
+    func fetchEmployees() {
+        isLoading = true
+        SupabaseIOSClient.shared.fetchTable(table: "employees") { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                switch result {
+                case .success(let items):
+                    var list: [IOSEmployeeItem] = []
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+
+                    for item in items {
+                        let idStr = item["id"] as? String ?? ""
+                        let uidStr = item["uid"] as? String ?? "EMP-101"
+                        let nameStr = item["name"] as? String ?? "Staff Member"
+                        let roleStr = item["role"] as? String ?? "Staff"
+                        let mobileStr = item["mobile"] as? String ?? (item["phone"] as? String ?? "")
+                        let emailStr = item["email"] as? String ?? ""
+                        let addressStr = item["address"] as? String ?? ""
+                        let bankNameStr = item["bank_name"] as? String ?? ""
+                        let bankAccountStr = item["bank_account"] as? String ?? ""
+                        let idNumberStr = item["id_number"] as? String ?? ""
+                        let emergencyContactStr = item["emergency_contact"] as? String ?? ""
+
+                        let joinedOnStr = item["joined_on"] as? String ?? ""
+                        let joinedOnDate = dateFormatter.date(from: String(joinedOnStr.prefix(10))) ?? Date()
+
+                        let leftOnStr = item["left_on"] as? String ?? ""
+                        let leftOnDate = leftOnStr.isEmpty ? nil : dateFormatter.date(from: String(leftOnStr.prefix(10)))
+
+                        let photoUrlStr = item["photo_url"] as? String ?? ""
+                        let remarkStr = item["remark"] as? String ?? ""
+                        let activeDaysInt = (item["active_days"] as? NSNumber)?.intValue ?? 0
+                        let salaryDb = (item["salary"] as? NSNumber)?.doubleValue ?? 0.0
+                        let salaryTypeStr = item["salary_type"] as? String ?? "Monthly"
+                        let udhaarBalDb = (item["udhaar_balance"] as? NSNumber)?.doubleValue ?? 0.0
+                        let ctcYtdDb = (item["ctc_ytd"] as? NSNumber)?.doubleValue ?? 0.0
+                        let statusStr = item["status"] as? String ?? "Active"
+
+                        list.append(IOSEmployeeItem(
+                            id: idStr,
+                            uid: uidStr,
+                            name: nameStr,
+                            role: roleStr,
+                            mobile: mobileStr,
+                            email: emailStr,
+                            address: addressStr,
+                            bankName: bankNameStr,
+                            bankAccount: bankAccountStr,
+                            idNumber: idNumberStr,
+                            emergencyContact: emergencyContactStr,
+                            joinedOn: joinedOnDate,
+                            leftOn: leftOnDate,
+                            photoUrl: photoUrlStr,
+                            remark: remarkStr,
+                            activeDays: activeDaysInt,
+                            salary: salaryDb,
+                            salaryType: salaryTypeStr,
+                            udhaarBalance: udhaarBalDb,
+                            ctcYtd: ctcYtdDb,
+                            status: statusStr
+                        ))
+                    }
+                    self.employees = list
+                case .failure(let err):
+                    self.toastMsg = "Failed to load employees: \(err.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func fetchTransactions() {
+        SupabaseIOSClient.shared.fetchTable(table: "employee_transactions") { result in
+            DispatchQueue.main.async {
+                if case .success(let items) = result {
+                    var list: [IOSEmployeeTransactionItem] = []
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+
+                    for item in items {
+                        let idStr = item["id"] as? String ?? ""
+                        let empIdStr = item["employee_id"] as? String ?? ""
+                        let typeStr = item["type"] as? String ?? "Gift"
+                        let amt = (item["amount"] as? NSNumber)?.doubleValue ?? 0.0
+                        let dateStr = item["date"] as? String ?? ""
+                        let d = dateFormatter.date(from: String(dateStr.prefix(10))) ?? Date()
+                        let noteStr = item["note"] as? String ?? ""
+
+                        list.append(IOSEmployeeTransactionItem(
+                            id: idStr,
+                            employeeId: empIdStr,
+                            type: typeStr,
+                            amount: amt,
+                            date: d,
+                            note: noteStr
+                        ))
+                    }
+                    self.transactions = list
+                }
+            }
+        }
     }
 
     var body: some View {
@@ -247,32 +281,50 @@ struct IOSEmployeesContentView: View {
                 }
 
                 // EMPLOYEE CARDS LIST
-                ScrollView {
-                    LazyVStack(spacing: 14) {
-                        ForEach(filteredEmployees) { employee in
-                            IOSEmployeeCard(
-                                employee: employee,
-                                onSelect: {
-                                    selectedDetailEmployee = employee
-                                },
-                                onCall: {
-                                    if let url = URL(string: "tel://\(employee.mobile.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: ""))") {
-                                        UIApplication.shared.open(url)
-                                    }
-                                },
-                                onEdit: {
-                                    editingEmployee = employee
-                                    showFormSheet = true
-                                },
-                                onDelete: {
-                                    deletingEmployee = employee
-                                    showDeleteAlert = true
-                                }
-                            )
-                        }
+                if isLoading {
+                    VStack {
+                        Spacer()
+                        ProgressView("Loading employees...")
+                        Spacer()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 80)
+                } else if filteredEmployees.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("No staff members found.")
+                            .font(.subheadline)
+                            .foregroundColor(textMuted)
+                        Spacer()
+                    }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 14) {
+                            ForEach(filteredEmployees) { employee in
+                                IOSEmployeeCard(
+                                    employee: employee,
+                                    userRole: userRole,
+                                    onSelect: {
+                                        selectedDetailEmployee = employee
+                                    },
+                                    onCall: {
+                                        if let url = URL(string: "tel://\(employee.mobile.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: ""))") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    },
+                                    onEdit: {
+                                        editingEmployee = employee
+                                        showFormSheet = true
+                                    },
+                                    onDelete: {
+                                        if userRole.uppercased() == "ADMIN" {
+                                            deletingEmployee = employee
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 80)
+                    }
                 }
             }
 
@@ -292,17 +344,16 @@ struct IOSEmployeesContentView: View {
             }
             .padding(20)
         }
+        .onAppear {
+            self.userRole = SupabaseIOSClient.shared.userRole.uppercased()
+            self.fetchEmployees()
+            self.fetchTransactions()
+        }
         .sheet(isPresented: $showFormSheet) {
             IOSEmployeeFormSheet(
                 employee: editingEmployee,
-                onSave: { newEmp in
-                    if let target = editingEmployee, let idx = employees.firstIndex(where: { $0.id == target.id }) {
-                        employees[idx] = newEmp
-                        toastMsg = "Employee '\(newEmp.name)' updated"
-                    } else {
-                        employees.insert(newEmp, at: 0)
-                        toastMsg = "Employee '\(newEmp.name)' added"
-                    }
+                onSave: {
+                    self.fetchEmployees()
                     showFormSheet = false
                 }
             )
@@ -313,27 +364,25 @@ struct IOSEmployeesContentView: View {
                     employee: emp,
                     initialType: txType,
                     onSave: { type, amount, date, note in
-                        let newTx = IOSEmployeeTransactionItem(
-                            id: UUID().uuidString,
-                            employeeId: emp.id,
-                            type: type,
-                            amount: amount,
-                            date: date,
-                            note: note
-                        )
-                        transactions.append(newTx)
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd"
 
-                        // Update Udhaar balance
-                        if let idx = employees.firstIndex(where: { $0.id == emp.id }) {
-                            if type == "Employee Udhaar" {
-                                employees[idx].udhaarBalance += amount
-                            } else if type == "Udhaar Repayment" {
-                                employees[idx].udhaarBalance = max(0, employees[idx].udhaarBalance - amount)
+                        let payload: [String: Any] = [
+                            "employee_id": emp.id,
+                            "employee_uid": emp.uid,
+                            "type": type,
+                            "amount": amount,
+                            "date": dateFormatter.string(from: date),
+                            "note": note
+                        ]
+                        SupabaseIOSClient.shared.insertRecord(table: "employee_transactions", payload: payload) { _ in
+                            DispatchQueue.main.async {
+                                self.toastMsg = "Recorded \(type) of ₹\(Int(amount))"
+                                self.fetchEmployees()
+                                self.fetchTransactions()
+                                self.showTxSheet = false
                             }
                         }
-
-                        toastMsg = "Recorded \(type) of ₹\(Int(amount))"
-                        showTxSheet = false
                     }
                 )
             }
@@ -350,17 +399,19 @@ struct IOSEmployeesContentView: View {
                 }
             )
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Employee"),
-                message: Text("Are you sure you want to delete '\(deletingEmployee?.name ?? "")' (\(deletingEmployee?.role ?? ""))?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deletingEmployee {
-                        employees.removeAll { $0.id == target.id }
-                        toastMsg = "Employee '\(target.name)' deleted"
+        .sheet(item: $deletingEmployee) { target in
+            IOSThreeStepDeleteSheet(
+                itemName: "Employee: \(target.name)",
+                itemDetails: "UID: \(target.uid) | Role: \(target.role)",
+                userRole: userRole,
+                onConfirmDelete: {
+                    SupabaseIOSClient.shared.deleteRecord(table: "employees", id: target.id) { _ in
+                        DispatchQueue.main.async {
+                            toastMsg = "Employee '\(target.name)' deleted"
+                            fetchEmployees()
+                        }
                     }
-                },
-                secondaryButton: .cancel()
+                }
             )
         }
     }
@@ -368,6 +419,7 @@ struct IOSEmployeesContentView: View {
 
 struct IOSEmployeeCard: View {
     let employee: IOSEmployeeItem
+    var userRole: String = "STAFF"
     var onSelect: () -> Void
     var onCall: () -> Void
     var onEdit: () -> Void
@@ -382,15 +434,31 @@ struct IOSEmployeeCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // AVATAR, NAME, ROLE, DELETE ICON
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                        .overlay(Circle().stroke(Color.blue.opacity(0.3), lineWidth: 1))
-                    Text(employee.initials)
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.blue)
+                if !employee.photoUrl.isEmpty, let url = URL(string: employee.photoUrl) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable()
+                                .scaledToFill()
+                                .frame(width: 44, height: 44)
+                                .clipShape(Circle())
+                        } else {
+                            ZStack {
+                                Circle().fill(Color.blue.opacity(0.12)).frame(width: 44, height: 44)
+                                Text(employee.initials).font(.subheadline).fontWeight(.bold).foregroundColor(.blue)
+                            }
+                        }
+                    }
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.opacity(0.12))
+                            .frame(width: 44, height: 44)
+                            .overlay(Circle().stroke(Color.blue.opacity(0.3), lineWidth: 1))
+                        Text(employee.initials)
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -406,10 +474,12 @@ struct IOSEmployeeCard: View {
 
                 Spacer()
 
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                        .foregroundColor(.red.opacity(0.8))
+                if userRole.uppercased() == "ADMIN" {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.subheadline)
+                            .foregroundColor(.red.opacity(0.8))
+                    }
                 }
             }
 
@@ -507,107 +577,305 @@ struct IOSEmployeeCard: View {
 
 struct IOSEmployeeFormSheet: View {
     var employee: IOSEmployeeItem?
-    var onSave: (IOSEmployeeItem) -> Void
+    var onSave: () -> Void
 
     @Environment(\.presentationMode) var presentationMode
     @State private var name = ""
-    @State private var role = "Staff"
     @State private var mobile = ""
-    @State private var email = ""
+    @State private var role = "Staff"
+    @State private var status = "Active"
     @State private var salaryType = "Monthly"
     @State private var salaryStr = ""
+    @State private var joinedOn = Date()
+    @State private var hasLeft = false
+    @State private var leftOn = Date()
     @State private var bankName = ""
     @State private var bankAccount = ""
     @State private var idNumber = ""
     @State private var emergencyContact = ""
-    @State private var joinedOn = Date()
+    @State private var address = ""
     @State private var remark = ""
+    @State private var photoUrl = ""
+
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var selectedPhotoImage: UIImage? = nil
+    @State private var isUploadingPhoto = false
+    @State private var errorMsg: String? = nil
+    @State private var isSaving = false
+
+    let roleOptions = ["Helper", "Labour", "Driver", "Staff", "Manager", "Operator"]
+    let statusOptions = ["Active", "Inactive"]
+    let salaryTypeOptions = ["Monthly", "Per Day"]
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Basic Information")) {
-                    TextField("Full Name *", text: $name)
-                    TextField("Role / Designation", text: $role)
-                    TextField("Mobile Number *", text: $mobile)
-                        .keyboardType(.phonePad)
-                    TextField("Email Address", text: $email)
-                        .keyboardType(.emailAddress)
-                }
-
-                Section(header: Text("Salary & Compensation")) {
-                    Picker("Salary Type", selection: $salaryType) {
-                        Text("Monthly").tag("Monthly")
-                        Text("Per Day").tag("Per Day")
+                if let err = errorMsg {
+                    Section {
+                        Text("⚠️ \(err)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
                     }
-                    .pickerStyle(SegmentedPickerStyle())
-
-                    TextField(salaryType == "Per Day" ? "Daily Rate (₹)" : "Monthly Salary (₹)", text: $salaryStr)
-                        .keyboardType(.numberPad)
                 }
 
-                Section(header: Text("Dates (Joined On)")) {
-                    DatePicker("Joined On Date", selection: $joinedOn, displayedComponents: .date)
+                // 1. EMPLOYEE PHOTO
+                Section(header: Text("EMPLOYEE PHOTO")) {
+                    HStack(spacing: 14) {
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            HStack {
+                                if let img = selectedPhotoImage {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.blue, lineWidth: 2))
+                                } else if !photoUrl.isEmpty, let url = URL(string: photoUrl) {
+                                    AsyncImage(url: url) { phase in
+                                        if let image = phase.image {
+                                            image.resizable().scaledToFill().frame(width: 56, height: 56).clipShape(Circle())
+                                        } else {
+                                            Image(systemName: "person.crop.circle.fill").resizable().frame(width: 56, height: 56).foregroundColor(.blue)
+                                        }
+                                    }
+                                } else {
+                                    Image(systemName: "camera.circle.fill")
+                                        .resizable()
+                                        .frame(width: 56, height: 56)
+                                        .foregroundColor(.blue)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Employee Photo").font(.subheadline).bold()
+                                    Text(isUploadingPhoto ? "Uploading..." : (!photoUrl.isEmpty || selectedPhotoImage != nil) ? "Tap to Replace Photo" : "Tap to Add Photo")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                        .onChange(of: selectedPhotoItem) { newItem in
+                            Task {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                   let uiImage = UIImage(data: data) {
+                                    await MainActor.run {
+                                        self.selectedPhotoImage = uiImage
+                                        self.isUploadingPhoto = true
+                                        self.errorMsg = nil
+                                    }
+                                    let fileName = "emp_\(Int(Date().timeIntervalSince1970)).jpg"
+                                    SupabaseIOSClient.shared.uploadEmployeePhoto(imageData: data, fileName: fileName) { result in
+                                        DispatchQueue.main.async {
+                                            self.isUploadingPhoto = false
+                                            switch result {
+                                            case .success(let publicUrl):
+                                                self.photoUrl = publicUrl
+                                            case .failure(let err):
+                                                self.errorMsg = "Photo upload error: \(err.localizedDescription)"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
-                Section(header: Text("Banking & Identity Details")) {
-                    TextField("Bank Name", text: $bankName)
-                    TextField("Bank Account Number", text: $bankAccount)
-                        .keyboardType(.numberPad)
-                    TextField("CNIC / ID Number", text: $idNumber)
-                    TextField("Emergency Contact", text: $emergencyContact)
-                        .keyboardType(.phonePad)
+                // 2. FULL NAME * & 3. MOBILE NUMBER * & 4. ROLE & 5. STATUS
+                Section(header: Text("BASIC DETAILS")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Full Name *").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. Ravi Kumar", text: $name)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Mobile Number *").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. +91 98765 43210", text: $mobile)
+                            .keyboardType(.phonePad)
+                    }
+
+                    Picker("Role / Designation", selection: $role) {
+                        ForEach(roleOptions, id: \.self) { r in
+                            Text(r).tag(r)
+                        }
+                    }
+
+                    Picker("Status", selection: $status) {
+                        ForEach(statusOptions, id: \.self) { st in
+                            Text(st).tag(st)
+                        }
+                    }
                 }
 
-                Section(header: Text("Remarks")) {
-                    TextField("Remarks / Notes", text: $remark)
+                // 6. SALARY TYPE & 7. SALARY / RATE
+                Section(header: Text("SALARY & COMPENSATION")) {
+                    Picker("Salary Type", selection: $salaryType) {
+                        ForEach(salaryTypeOptions, id: \.self) { st in
+                            Text(st).tag(st)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Salary / Rate (₹)").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. 25000 or 850", text: $salaryStr)
+                            .keyboardType(.decimalPad)
+                    }
+                }
+
+                // 8. JOINED ON * & 9. LEFT ON
+                Section(header: Text("EMPLOYMENT DATES")) {
+                    DatePicker("Joined On *", selection: $joinedOn, displayedComponents: .date)
+
+                    Toggle("Has Left Company", isOn: $hasLeft)
+                    if hasLeft {
+                        DatePicker("Left On (Optional)", selection: $leftOn, displayedComponents: .date)
+                    }
+                }
+
+                // 10. BANK NAME & 11. BANK ACCOUNT & 12. ID NUMBER & 13. EMERGENCY CONTACT
+                Section(header: Text("BANKING & IDENTITY")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bank Name").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. HDFC Bank", text: $bankName)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bank Account / IBAN").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. 5010023456789", text: $bankAccount)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("ID / CNIC / Identity No").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. AADH-9876-1234", text: $idNumber)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Emergency Contact").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. +91 98111 22233", text: $emergencyContact)
+                            .keyboardType(.phonePad)
+                    }
+                }
+
+                // 14. ADDRESS & 15. REMARK / NOTES
+                Section(header: Text("ADDRESS & NOTES")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Address").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. House #45, Industrial Area, Sector 5", text: $address)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Remark / Notes").font(.caption).bold().foregroundColor(.secondary)
+                        TextField("e.g. Skilled machine operator, shifts day/night", text: $remark)
+                    }
                 }
             }
-            .navigationTitle(employee == nil ? "Add Employee" : "Edit Employee Profile")
+            .navigationTitle(employee == nil ? "Add New Employee" : "Edit Employee Profile")
             .navigationBarItems(
-                leading: Button("Cancel") { presentationMode.wrappedValue.dismiss() },
-                trailing: Button("Save") {
-                    let salVal = Double(salaryStr) ?? 0.0
-                    let newEmp = IOSEmployeeItem(
-                        id: employee?.id ?? UUID().uuidString,
-                        uid: employee?.uid ?? "EMP-\(Int.random(in: 100...999))",
-                        name: name.trimmingCharacters(in: .whitespaces),
-                        role: role.isEmpty ? "Staff" : role,
-                        mobile: mobile,
-                        email: email,
-                        address: employee?.address ?? "",
-                        bankName: bankName,
-                        bankAccount: bankAccount,
-                        idNumber: idNumber,
-                        emergencyContact: emergencyContact,
-                        joinedOn: joinedOn,
-                        leftOn: nil,
-                        photoUrl: "",
-                        remark: remark,
-                        activeDays: employee?.activeDays ?? 1,
-                        salary: salVal,
-                        salaryType: salaryType,
-                        udhaarBalance: employee?.udhaarBalance ?? 0.0,
-                        ctcYtd: employee?.ctcYtd ?? 300000.0,
-                        status: "Active"
-                    )
-                    onSave(newEmp)
-                }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                leading: Button("Cancel") {
+                    presentationMode.wrappedValue.dismiss()
+                },
+                trailing: Button(employee == nil ? "Add Employee" : "Save Changes") {
+                    saveEmployee()
+                }
+                .font(.headline)
+                .foregroundColor(.blue)
+                .disabled(isSaving || isUploadingPhoto)
             )
             .onAppear {
                 if let e = employee {
                     name = e.name
-                    role = e.role
                     mobile = e.mobile
-                    email = e.email
+                    role = e.role
+                    status = e.status
                     salaryType = e.salaryType
-                    salaryStr = e.salary > 0 ? String(Int(e.salary)) : ""
+                    salaryStr = e.salary > 0 ? (e.salary.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(e.salary)) : String(e.salary)) : ""
+                    joinedOn = e.joinedOn
+                    if let l = e.leftOn {
+                        hasLeft = true
+                        leftOn = l
+                    }
                     bankName = e.bankName
                     bankAccount = e.bankAccount
                     idNumber = e.idNumber
                     emergencyContact = e.emergencyContact
-                    joinedOn = e.joinedOn
+                    address = e.address
                     remark = e.remark
+                    photoUrl = e.photoUrl
+                }
+            }
+        }
+    }
+
+    private func saveEmployee() {
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let trimmedMobile = mobile.trimmingCharacters(in: .whitespaces)
+
+        if trimmedName.isEmpty {
+            errorMsg = "Full Name is required."
+            return
+        }
+        if trimmedMobile.isEmpty {
+            errorMsg = "Mobile Number is required."
+            return
+        }
+        if isUploadingPhoto {
+            errorMsg = "Photo is still uploading. Please wait..."
+            return
+        }
+
+        isSaving = true
+        errorMsg = nil
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        var payload: [String: Any] = [
+            "name": trimmedName,
+            "mobile": trimmedMobile,
+            "role": role.isEmpty ? "Staff" : role,
+            "status": status,
+            "salary_type": salaryType,
+            "salary": Double(salaryStr) ?? 0.0,
+            "joined_on": dateFormatter.string(from: joinedOn),
+            "bank_name": bankName.trimmingCharacters(in: .whitespaces),
+            "bank_account": bankAccount.trimmingCharacters(in: .whitespaces),
+            "id_number": idNumber.trimmingCharacters(in: .whitespaces),
+            "emergency_contact": emergencyContact.trimmingCharacters(in: .whitespaces),
+            "address": address.trimmingCharacters(in: .whitespaces),
+            "remark": remark.trimmingCharacters(in: .whitespaces)
+        ]
+        if !photoUrl.isEmpty {
+            payload["photo_url"] = photoUrl
+        }
+        if hasLeft {
+            payload["left_on"] = dateFormatter.string(from: leftOn)
+        }
+
+        if let target = employee {
+            SupabaseIOSClient.shared.updateRecord(table: "employees", id: target.id, payload: payload) { result in
+                DispatchQueue.main.async {
+                    self.isSaving = false
+                    switch result {
+                    case .success:
+                        self.onSave()
+                        self.presentationMode.wrappedValue.dismiss()
+                    case .failure(let err):
+                        self.errorMsg = "Failed to update employee: \(err.localizedDescription)"
+                    }
+                }
+            }
+        } else {
+            payload["uid"] = "EMP-\(Int.random(in: 1000...9999))"
+            SupabaseIOSClient.shared.insertRecord(table: "employees", payload: payload) { result in
+                DispatchQueue.main.async {
+                    self.isSaving = false
+                    switch result {
+                    case .success:
+                        self.onSave()
+                        self.presentationMode.wrappedValue.dismiss()
+                    case .failure(let err):
+                        self.errorMsg = "Failed to add employee: \(err.localizedDescription)"
+                    }
                 }
             }
         }
@@ -687,14 +955,30 @@ struct IOSEmployeeDetailSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     // HEADER
                     HStack(spacing: 14) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.blue.opacity(0.12))
-                                .frame(width: 54, height: 54)
-                            Text(employee.initials)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.blue)
+                        if !employee.photoUrl.isEmpty, let url = URL(string: employee.photoUrl) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image.resizable()
+                                        .scaledToFill()
+                                        .frame(width: 54, height: 54)
+                                        .clipShape(Circle())
+                                } else {
+                                    ZStack {
+                                        Circle().fill(Color.blue.opacity(0.12)).frame(width: 54, height: 54)
+                                        Text(employee.initials).font(.title2).fontWeight(.bold).foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                        } else {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.12))
+                                    .frame(width: 54, height: 54)
+                                Text(employee.initials)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.blue)
+                            }
                         }
 
                         VStack(alignment: .leading, spacing: 2) {

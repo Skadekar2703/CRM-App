@@ -637,8 +637,12 @@ class SupabaseAndroidClient(context: Context) {
     }
 
     suspend fun fetchCategories(): Result<List<String>> = withContext(Dispatchers.IO) {
+        fetchCategoriesList().map { list -> list.map { it.second }.distinct() }
+    }
+
+    suspend fun fetchCategoriesList(): Result<List<Pair<String, String>>> = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl/rest/v1/categories?select=name&order=name.asc"
+            val url = "$baseUrl/rest/v1/categories?select=id,name&order=name.asc"
             var activeToken = getActiveToken()
 
             var request = Request.Builder()
@@ -669,15 +673,28 @@ class SupabaseAndroidClient(context: Context) {
 
             response.use { resp ->
                 if (!resp.isSuccessful) {
-                    val friendlyError = parseError(bodyString, resp.code)
-                    return@withContext Result.failure(Exception(friendlyError))
+                    val fallback = fetchTable("categories", select = "id,name", order = "")
+                    return@withContext fallback.map { array ->
+                        val list = mutableListOf<Pair<String, String>>()
+                        for (i in 0 until array.length()) {
+                            val obj = array.getJSONObject(i)
+                            val id = obj.optString("id", "")
+                            val catName = obj.optString("name", "")
+                            if (catName.isNotBlank()) {
+                                list.add(Pair(id, catName))
+                            }
+                        }
+                        list
+                    }
                 }
                 val array = org.json.JSONArray(bodyString)
-                val list = mutableListOf<String>()
+                val list = mutableListOf<Pair<String, String>>()
                 for (i in 0 until array.length()) {
-                    val catName = array.getJSONObject(i).optString("name", "")
-                    if (catName.isNotBlank() && !list.contains(catName)) {
-                        list.add(catName)
+                    val obj = array.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val catName = obj.optString("name", "")
+                    if (catName.isNotBlank()) {
+                        list.add(Pair(id, catName))
                     }
                 }
                 Result.success(list)
@@ -686,6 +703,71 @@ class SupabaseAndroidClient(context: Context) {
             Result.failure(Exception(mapException(e)))
         }
     }
+
+    suspend fun fetchAreasList(): Result<List<Pair<String, String>>> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/rest/v1/areas?select=id,name&order=name.asc"
+            var activeToken = getActiveToken()
+
+            var request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .get()
+                .build()
+
+            var response = httpClient.newCall(request).execute()
+            var bodyString = response.body?.string() ?: ""
+
+            if (response.code == 401) {
+                response.close()
+                val refreshed = refreshSession()
+                if (refreshed != null && !refreshed.accessToken.isNullOrEmpty()) {
+                    activeToken = refreshed.accessToken!!
+                    request = Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $activeToken")
+                        .get()
+                        .build()
+                    response = httpClient.newCall(request).execute()
+                    bodyString = response.body?.string() ?: ""
+                }
+            }
+
+            response.use { resp ->
+                if (!resp.isSuccessful) {
+                    val fallback = fetchTable("areas", select = "id,name", order = "")
+                    return@withContext fallback.map { array ->
+                        val list = mutableListOf<Pair<String, String>>()
+                        for (i in 0 until array.length()) {
+                            val obj = array.getJSONObject(i)
+                            val id = obj.optString("id", "")
+                            val areaName = obj.optString("name", "")
+                            if (areaName.isNotBlank()) {
+                                list.add(Pair(id, areaName))
+                            }
+                        }
+                        list
+                    }
+                }
+                val array = org.json.JSONArray(bodyString)
+                val list = mutableListOf<Pair<String, String>>()
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val areaName = obj.optString("name", "")
+                    if (areaName.isNotBlank()) {
+                        list.add(Pair(id, areaName))
+                    }
+                }
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(mapException(e)))
+        }
+    }
+
 
     suspend fun updateItem(
         id: String,
@@ -1071,6 +1153,34 @@ class SupabaseAndroidClient(context: Context) {
         }
         val cleanPath = rawPath.removePrefix("/")
         return "$baseUrl/storage/v1/object/public/customer_photos/$cleanPath"
+    }
+
+    suspend fun uploadCustomerPhoto(imageBytes: ByteArray, fileName: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val cleanFileName = fileName.removePrefix("customer_photos/").removePrefix("/")
+            val uploadUrl = "$baseUrl/storage/v1/object/customer_photos/$cleanFileName"
+            val activeToken = getActiveToken()
+
+            val request = Request.Builder()
+                .url(uploadUrl)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .addHeader("x-upsert", "true")
+                .post(imageBytes.toRequestBody("image/jpeg".toMediaType()))
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                val bodyString = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    val err = parseError(bodyString, resp.code)
+                    return@withContext Result.failure(Exception(err))
+                }
+                val storedPath = "customer_photos/$cleanFileName"
+                Result.success(storedPath)
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(mapException(e)))
+        }
     }
 
     suspend fun fetchCustomers(): Result<List<CustomerDetailsModel>> = withContext(Dispatchers.IO) {
@@ -1542,10 +1652,11 @@ class SupabaseAndroidClient(context: Context) {
     suspend fun fetchTable(
         table: String,
         select: String = "*",
-        order: String = "created_at.desc"
+        order: String = ""
     ): Result<org.json.JSONArray> = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl/rest/v1/$table?select=$select&order=$order"
+            val orderParam = if (order.isNotBlank()) "&order=$order" else ""
+            val url = "$baseUrl/rest/v1/$table?select=$select$orderParam"
             var activeToken = getActiveToken()
 
             var request = Request.Builder()
@@ -1923,6 +2034,169 @@ class SupabaseAndroidClient(context: Context) {
                 val msg = jsonObj.optString("message", "Staff status updated successfully.")
                 Result.success(msg)
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun uploadEmployeePhoto(imageBytes: ByteArray, fileName: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val cleanFileName = fileName.removePrefix("employee_photos/").removePrefix("photos/").removePrefix("/")
+            val uploadUrl = "$baseUrl/storage/v1/object/employee_photos/$cleanFileName"
+            val activeToken = getActiveToken()
+
+            val request = Request.Builder()
+                .url(uploadUrl)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $activeToken")
+                .addHeader("x-upsert", "true")
+                .post(imageBytes.toRequestBody("image/jpeg".toMediaType()))
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                val bodyString = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    return@withContext uploadCustomerPhoto(imageBytes, "emp_$cleanFileName")
+                }
+                val storedUrl = "$baseUrl/storage/v1/object/public/employee_photos/$cleanFileName"
+                Result.success(storedUrl)
+            }
+        } catch (e: Exception) {
+            uploadCustomerPhoto(imageBytes, "emp_$fileName")
+        }
+    }
+
+    suspend fun fetchProfitLossReport(fromDate: String, toDate: String): Result<com.example.crm_app_kmp.profitloss.ProfitLossReport> = withContext(Dispatchers.IO) {
+        try {
+            var revenueSum = 0.0
+            var purchasesSum = 0.0
+            var expensesSum = 0.0
+            var salariesSum = 0.0
+            var udhaariSum = 0.0
+            var jamaSum = 0.0
+
+            // 1. REVENUE (sales)
+            val salesRes = fetchTable("sales")
+            salesRes.onSuccess { arr ->
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val status = obj.optString("status", "").lowercase()
+                    if (status == "cancelled") continue
+
+                    val d = obj.optString("sale_date", obj.optString("date", obj.optString("created_at", ""))).take(10)
+                    if (d.isBlank() || (d >= fromDate && d <= toDate)) {
+                        val amt = obj.optDouble("total", obj.optDouble("grand_total", obj.optDouble("total_amount", obj.optDouble("subtotal", 0.0))))
+                        revenueSum += amt
+                    }
+                }
+            }
+
+            // 2. PURCHASES (supplier_ledger)
+            val ledgerRes = fetchTable("supplier_ledger")
+            ledgerRes.onSuccess { arr ->
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val d = obj.optString("date", obj.optString("created_at", "")).take(10)
+                    if (d.isBlank() || (d >= fromDate && d <= toDate)) {
+                        val type = obj.optString("transaction_type", obj.optString("type", "")).lowercase()
+                        if (type == "purchase" || type == "bill" || type == "debit") {
+                            val amt = obj.optDouble("amount", 0.0)
+                            purchasesSum += amt
+                        }
+                    }
+                }
+            }
+
+            // 3. EXPENSES (expenses - excluding salary/labour)
+            val expRes = fetchTable("expenses")
+            expRes.onSuccess { arr ->
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val d = obj.optString("expense_date", obj.optString("date", obj.optString("created_at", ""))).take(10)
+                    if (d.isBlank() || (d >= fromDate && d <= toDate)) {
+                        val cat = obj.optString("category", "").lowercase()
+                        if (!cat.contains("salary") && !cat.contains("labour") && !cat.contains("labor")) {
+                            val amt = obj.optDouble("amount", 0.0)
+                            expensesSum += amt
+                        }
+                    }
+                }
+            }
+
+            // 4. SALARIES / EMPLOYEE COSTS (employees & employee_transactions)
+            val empRecords = mutableListOf<com.example.crm_app_kmp.profitloss.EmployeeSalaryRecord>()
+            val empRes = fetchTable("employees")
+            empRes.onSuccess { arr ->
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val sal = obj.optDouble("salary", 0.0)
+                    val salType = obj.optString("salary_type", "Monthly")
+                    val joined = obj.optString("joined_on", obj.optString("created_at", ""))
+                    val left = obj.optString("left_on", "")
+                    val status = obj.optString("status", "Active")
+                    empRecords.add(
+                        com.example.crm_app_kmp.profitloss.EmployeeSalaryRecord(
+                            salary = sal,
+                            salaryType = salType,
+                            joinedOn = joined,
+                            leftOn = if (left.isNotBlank()) left else null,
+                            status = status
+                        )
+                    )
+                }
+            }
+
+            salariesSum = com.example.crm_app_kmp.profitloss.SalaryCostCalculator.calculateAttributableSalary(
+                fromDate = fromDate,
+                toDate = toDate,
+                employees = empRecords
+            )
+
+            // Add one-off bonuses, gifts, and labour expenses from employee_transactions
+            val empTxRes = fetchTable("employee_transactions")
+            empTxRes.onSuccess { arr ->
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val d = obj.optString("date", obj.optString("created_at", "")).take(10)
+                    if (d.isBlank() || (d >= fromDate && d <= toDate)) {
+                        val type = obj.optString("type", "").lowercase()
+                        if (type.contains("bonus") || type.contains("gift") || type.contains("labour") || type.contains("labor") || type.contains("extra")) {
+                            val amt = obj.optDouble("amount", 0.0)
+                            salariesSum += amt
+                        }
+                    }
+                }
+            }
+
+            // 5. UDHAARI & JAMA (udhaari)
+            val udhaariRes = fetchTable("udhaari")
+            udhaariRes.onSuccess { arr ->
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val d = obj.optString("date", obj.optString("created_at", "")).take(10)
+                    if (d.isBlank() || (d >= fromDate && d <= toDate)) {
+                        val type = obj.optString("type", "").lowercase()
+                        val amt = obj.optDouble("amount", 0.0)
+                        if (type == "baki" || type == "udhaar" || type == "debit" || type.contains("baki") || type.contains("udhaar")) {
+                            udhaariSum += amt
+                        } else if (type == "jama" || type == "payment" || type == "credit" || type.contains("jama") || type.contains("payment")) {
+                            jamaSum += amt
+                        }
+                    }
+                }
+            }
+
+            val report = com.example.crm_app_kmp.profitloss.ProfitLossCalculator.calculate(
+                fromDate = fromDate,
+                toDate = toDate,
+                revenue = revenueSum,
+                purchases = purchasesSum,
+                expenses = expensesSum,
+                salaries = salariesSum,
+                udhaari = udhaariSum,
+                jama = jamaSum
+            )
+            Result.success(report)
         } catch (e: Exception) {
             Result.failure(e)
         }

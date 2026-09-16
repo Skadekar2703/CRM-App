@@ -82,6 +82,8 @@ fun AndroidDaagContent() {
 
     val movements = remember { mutableStateListOf<StockMovementModel>() }
     val availableItems = remember { mutableStateListOf<ItemModel>() }
+    val availableTransports = remember { mutableStateListOf<com.example.crm_app_kmp.transports.TransportModel>() }
+    val availableSuppliers = remember { mutableStateListOf<String>() }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterChip by remember { mutableStateOf("All Movements") }
@@ -96,6 +98,23 @@ fun AndroidDaagContent() {
             resItems.onSuccess { fetchedItems ->
                 availableItems.clear()
                 availableItems.addAll(fetchedItems)
+            }
+
+            val resTrans = supabaseClient.fetchTransports()
+            resTrans.onSuccess { fetchedTrans ->
+                availableTransports.clear()
+                availableTransports.addAll(fetchedTrans)
+            }
+
+            val resSupp = supabaseClient.fetchTable("suppliers")
+            resSupp.onSuccess { suppArray ->
+                availableSuppliers.clear()
+                for (i in 0 until suppArray.length()) {
+                    val sName = suppArray.getJSONObject(i).optString("name", "")
+                    if (sName.isNotBlank() && !availableSuppliers.contains(sName)) {
+                        availableSuppliers.add(sName)
+                    }
+                }
             }
 
             val resMov = supabaseClient.fetchTable("stock_movements")
@@ -414,6 +433,8 @@ fun AndroidDaagContent() {
         MovementFormDialog(
             editingMovement = editingMovement,
             availableItems = availableItems,
+            availableTransports = availableTransports,
+            availableSuppliers = availableSuppliers,
             onDismiss = { showFormDialog = false },
             onSave = { direction, item, quantity, amount, supplier, transport, status, date ->
                 scope.launch {
@@ -656,6 +677,8 @@ private fun StockMovementCard(
 private fun MovementFormDialog(
     editingMovement: StockMovementModel?,
     availableItems: List<ItemModel> = emptyList(),
+    availableTransports: List<com.example.crm_app_kmp.transports.TransportModel> = emptyList(),
+    availableSuppliers: List<String> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (
         direction: String,
@@ -671,14 +694,13 @@ private fun MovementFormDialog(
     var direction by remember { mutableStateOf(editingMovement?.direction ?: "IN") }
     var selectedItemId by remember { mutableStateOf(availableItems.firstOrNull()?.id ?: "") }
     var item by remember { mutableStateOf(editingMovement?.item ?: availableItems.firstOrNull()?.name ?: "") }
-    var quantity by remember { mutableStateOf(editingMovement?.quantity ?: "1 Roll") }
-    var amountText by remember { mutableStateOf(editingMovement?.amount?.toInt()?.toString() ?: "0") }
-    var supplier by remember { mutableStateOf(editingMovement?.supplier?.takeIf { it != "—" } ?: "") }
-    var transport by remember { mutableStateOf(editingMovement?.transport?.takeIf { it != "—" } ?: "") }
+    var quantity by remember { mutableStateOf(editingMovement?.quantity ?: "") }
+    var amountText by remember { mutableStateOf(editingMovement?.amount?.toString() ?: "0") }
+    var supplier by remember { mutableStateOf(editingMovement?.supplier?.takeIf { it != "—" } ?: availableSuppliers.firstOrNull() ?: "") }
+    var transport by remember { mutableStateOf(editingMovement?.transport?.takeIf { it != "—" } ?: availableTransports.firstOrNull()?.transportName ?: "") }
     var status by remember { mutableStateOf(editingMovement?.status ?: "Pending") }
     var date by remember { mutableStateOf(editingMovement?.date ?: "Today") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
-    var expandedItemDropdown by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -689,9 +711,8 @@ private fun MovementFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -710,164 +731,167 @@ private fun MovementFormDialog(
                 }
 
                 errorMsg?.let { err ->
-                    Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Text("Direction", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = direction == "IN",
-                        onClick = { direction = "IN" },
-                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF16A34A))
-                    )
-                    Text("IN (Received)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    RadioButton(
-                        selected = direction == "OUT",
-                        onClick = { direction = "OUT" },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                    )
-                    Text("OUT (Dispatched)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-
-                // ITEM DROPDOWN SELECTOR
-                Text("Select Item *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { expandedItemDropdown = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(item.ifEmpty { "Select Item" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                        }
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
                     }
+                }
 
-                    DropdownMenu(
-                        expanded = expandedItemDropdown,
-                        onDismissRequest = { expandedItemDropdown = false }
-                    ) {
-                        availableItems.forEach { itemObj ->
-                            DropdownMenuItem(
-                                text = { Text("${itemObj.name} (${itemObj.code})", fontSize = 13.sp) },
-                                onClick = {
-                                    item = itemObj.name
-                                    selectedItemId = itemObj.id
-                                    expandedItemDropdown = false
-                                }
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppDropdown(
+                            value = if (direction == "IN") "IN (Stock Received)" else "OUT (Stock Dispatched)",
+                            onValueChange = { selected ->
+                                direction = if (selected.startsWith("IN")) "IN" else "OUT"
+                            },
+                            label = "Movement Direction",
+                            options = listOf("IN (Stock Received)", "OUT (Stock Dispatched)"),
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        if (availableItems.isNotEmpty()) {
+                            val itemOptions = availableItems.map { "${it.name} (${it.code})" }
+                            val currentOption = availableItems.find { it.name == item || it.id == selectedItemId }?.let { "${it.name} (${it.code})" } ?: itemOptions.first()
+                            com.example.crm_app_kmp.ui.components.AppDropdown(
+                                value = currentOption,
+                                onValueChange = { selectedOpt ->
+                                    val matched = availableItems.find { "${it.name} (${it.code})" == selectedOpt }
+                                    if (matched != null) {
+                                        item = matched.name
+                                        selectedItemId = matched.id
+                                    }
+                                },
+                                label = "Select Item",
+                                options = itemOptions,
+                                isRequired = true
+                            )
+                        } else {
+                            com.example.crm_app_kmp.ui.components.AppTextField(
+                                value = item,
+                                onValueChange = { item = it; errorMsg = null },
+                                label = "Item Name",
+                                placeholder = "e.g. Basmati Rice 25kg",
+                                isRequired = true
                             )
                         }
                     }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = quantity,
-                        onValueChange = { quantity = it },
-                        placeholder = { Text("Quantity (e.g. 2 bora)", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it },
-                        placeholder = { Text("Amount (₹)", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                OutlinedTextField(
-                    value = supplier,
-                    onValueChange = { supplier = it },
-                    placeholder = { Text("Supplier (Optional)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = transport,
-                    onValueChange = { transport = it },
-                    placeholder = { Text("Transport / Carrier (Optional)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    placeholder = { Text("Date (e.g. 15 Aug 2026)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("Complete", "Pending", "In Transit").forEach { st ->
-                        val isSelected = status == st
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isSelected) PrimaryBlue else Color(0xFFF1F5F9))
-                                .clickable { status = st }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(st, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else TextPrimary)
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = quantity,
+                                    onValueChange = { quantity = it },
+                                    label = "Quantity",
+                                    placeholder = "e.g. 2 bora / 5 peti / 50 units"
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppNumberField(
+                                    value = amountText,
+                                    onValueChange = { amountText = it },
+                                    label = "Amount (₹)",
+                                    placeholder = "0.00",
+                                    allowDecimal = true
+                                )
+                            }
                         }
                     }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (availableSuppliers.isNotEmpty()) {
+                                    com.example.crm_app_kmp.ui.components.AppDropdown(
+                                        value = if (supplier.isBlank()) availableSuppliers.first() else supplier,
+                                        onValueChange = { supplier = it },
+                                        label = "Supplier (Optional)",
+                                        options = availableSuppliers
+                                    )
+                                } else {
+                                    com.example.crm_app_kmp.ui.components.AppTextField(
+                                        value = supplier,
+                                        onValueChange = { supplier = it },
+                                        label = "Supplier (Optional)",
+                                        placeholder = "Sharma Wholesale"
+                                    )
+                                }
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (availableTransports.isNotEmpty()) {
+                                    val transNames = availableTransports.map { it.transportName }
+                                    com.example.crm_app_kmp.ui.components.AppDropdown(
+                                        value = if (transport.isBlank()) transNames.first() else transport,
+                                        onValueChange = { transport = it },
+                                        label = "Transport / Carrier",
+                                        options = transNames
+                                    )
+                                } else {
+                                    com.example.crm_app_kmp.ui.components.AppTextField(
+                                        value = transport,
+                                        onValueChange = { transport = it },
+                                        label = "Transport / Carrier",
+                                        placeholder = "VRL Logistics"
+                                    )
+                                }
+                            }
+                        }
                     }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            if (item.isBlank()) {
-                                errorMsg = "Item Name is required."
-                            } else {
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = status,
+                                    onValueChange = { status = it },
+                                    label = "Status",
+                                    options = listOf("Complete", "Pending", "In Transit", "Cancelled")
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDatePicker(
+                                    value = date,
+                                    onValueChange = { date = it },
+                                    label = "Movement Date"
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingMovement != null) "Save Changes" else "Add Movement",
+                            onClick = {
+                                if (item.isBlank()) {
+                                    errorMsg = "Item Selection/Name is required"
+                                    return@AppFormButton
+                                }
                                 val amt = amountText.toDoubleOrNull() ?: 0.0
                                 onSave(
                                     direction,
                                     item.trim(),
-                                    quantity.trim(),
+                                    quantity.trim().ifEmpty { "1 qty" },
                                     amt,
-                                    supplier.trim(),
-                                    transport.trim(),
+                                    supplier.trim().ifEmpty { "—" },
+                                    transport.trim().ifEmpty { "—" },
                                     status,
-                                    date.trim()
+                                    date.trim().ifEmpty { "Today" }
                                 )
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingMovement != null) "Save Changes" else "Add Movement", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        )
                     }
                 }
             }
         }
     }
 }
+

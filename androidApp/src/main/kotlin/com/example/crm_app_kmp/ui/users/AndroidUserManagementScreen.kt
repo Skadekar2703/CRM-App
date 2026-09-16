@@ -79,10 +79,12 @@ fun AndroidUserManagementContent() {
     // DIALOG STATES
     var passwordTargetUser by remember { mutableStateOf<UserModel?>(null) }
     var statusTargetUser by remember { mutableStateOf<UserModel?>(null) }
+    var showCreateUserDialog by remember { mutableStateOf(false) }
 
     fun showToast(msg: String) {
         toastMsg = msg
     }
+
 
     fun loadUsers() {
         scope.launch {
@@ -559,6 +561,118 @@ private fun UserCardItem(
 }
 
 @Composable
+private fun UserFormDialog(
+    editingUser: UserModel?,
+    onDismiss: () -> Unit,
+    onSave: (username: String, role: String, password: String) -> Unit
+) {
+    var username by remember { mutableStateOf(editingUser?.username ?: "") }
+    var role by remember { mutableStateOf(editingUser?.role?.uppercase() ?: "STAFF") }
+    var password by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (editingUser != null) "Edit User / '${editingUser.username}'" else "Create Staff / User Account",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                errorMsg?.let { err ->
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = username,
+                            onValueChange = { username = it; errorMsg = null },
+                            label = "Username",
+                            placeholder = "e.g. staff01 or admin1",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppDropdown(
+                            value = role,
+                            onValueChange = { role = it },
+                            label = "User Role",
+                            options = listOf("STAFF", "ADMIN"),
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = password,
+                            onValueChange = { password = it; errorMsg = null },
+                            label = if (editingUser != null) "Set New Password (optional)" else "Account Password",
+                            placeholder = if (editingUser != null) "Leave blank to keep existing password" else "Minimum 6 characters",
+                            isRequired = editingUser == null
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingUser != null) "Save Password / Role" else "Create Account",
+                            onClick = {
+                                if (username.isBlank()) {
+                                    errorMsg = "Username is required"
+                                    return@AppFormButton
+                                }
+                                if (password.isNotBlank() && password.length < 6) {
+                                    errorMsg = "Password must be at least 6 characters"
+                                    return@AppFormButton
+                                }
+                                if (editingUser == null && password.isBlank()) {
+                                    errorMsg = "Password is required for new accounts"
+                                    return@AppFormButton
+                                }
+                                onSave(username.trim().lowercase(), role, password.trim())
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChangePasswordDialog(
     targetUser: UserModel,
     isSubmitting: Boolean,
@@ -670,3 +784,4 @@ private fun ChangePasswordDialog(
         }
     }
 }
+

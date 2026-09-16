@@ -77,6 +77,74 @@ class SupabaseIOSClient: ObservableObject {
         }.resume()
     }
 
+    func uploadCustomerPhoto(imageData: Data, fileName: String, completion: @escaping (Result<String, Error>) -> Void) {
+        let cleanFileName = fileName.replacingOccurrences(of: "^customer_photos/", with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(baseURL)/storage/v1/object/customer_photos/\(cleanFileName)") else {
+            completion(.failure(NSError(domain: "SupabaseIOSClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid storage URL"])))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = currentSession?.accessToken, !token.isEmpty {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.addValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.addValue("true", forHTTPHeaderField: "x-upsert")
+        request.httpBody = imageData
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
+                let errMsg = String(data: data ?? Data(), encoding: .utf8) ?? "Upload failed"
+                completion(.failure(NSError(domain: "SupabaseIOSClient", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: errMsg])))
+                return
+            }
+            let path = "customer_photos/\(cleanFileName)"
+            completion(.success(path))
+        }.resume()
+    }
+
+    func uploadEmployeePhoto(imageData: Data, fileName: String, completion: @escaping (Result<String, Error>) -> Void) {
+        let cleanFileName = fileName.replacingOccurrences(of: "^customer_photos/", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "^employee_photos/", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "^photos/", with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(baseURL)/storage/v1/object/customer_photos/\(cleanFileName)") else {
+            completion(.failure(NSError(domain: "SupabaseIOSClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid storage URL"])))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        if let token = currentSession?.accessToken, !token.isEmpty {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.addValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.addValue("true", forHTTPHeaderField: "x-upsert")
+        request.httpBody = imageData
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
+                let errMsg = String(data: data ?? Data(), encoding: .utf8) ?? "Upload failed"
+                completion(.failure(NSError(domain: "SupabaseIOSClient", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: errMsg])))
+                return
+            }
+            let path = "customer_photos/\(cleanFileName)"
+            completion(.success(path))
+        }.resume()
+    }
+
     func restoreSession() {
         guard let token = defaults.string(forKey: "\(sessionKey)_token"),
               let userId = defaults.string(forKey: "\(sessionKey)_id"),

@@ -146,7 +146,7 @@ fun AndroidItemsContent() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { refreshItems() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE2E8F0), contentColor = TextPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue, contentColor = Color.White),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Refresh", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -480,7 +480,7 @@ private fun ItemFormDialog(
     var category by remember { mutableStateOf(editingItem?.category ?: "Groceries") }
     var unit by remember { mutableStateOf(editingItem?.unit ?: "Pcs") }
     var lowStockAlert by remember { mutableStateOf(editingItem?.lowStockAlert?.toString() ?: "5") }
-    var salePrice by remember { mutableStateOf(editingItem?.salePrice?.toString() ?: "45.0") }
+    var salePrice by remember { mutableStateOf(editingItem?.salePrice?.toString() ?: "0.00") }
     var status by remember { mutableStateOf(editingItem?.status ?: "Active") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
@@ -513,106 +513,136 @@ private fun ItemFormDialog(
                 }
 
                 errorMsg?.let { err ->
-                    Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Item Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = brand,
-                        onValueChange = { brand = it },
-                        placeholder = { Text("Brand Name", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = { code = it },
-                        placeholder = { Text("Item Code (SKU)", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = category,
-                        onValueChange = { category = it },
-                        placeholder = { Text("Category", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = unit,
-                        onValueChange = { unit = it },
-                        placeholder = { Text("Unit (Pcs/Kg/Bag)", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = salePrice,
-                        onValueChange = { salePrice = it; if (errorMsg != null) errorMsg = null },
-                        placeholder = { Text("Sale Price (₹) *", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = lowStockAlert,
-                        onValueChange = { lowStockAlert = it },
-                        placeholder = { Text("Low Stock Alert", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Cancel", fontSize = 13.sp)
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
                     }
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            val priceNum = salePrice.toDoubleOrNull()
-                            val alertNum = lowStockAlert.toIntOrNull() ?: 5
-                            if (name.isBlank() || priceNum == null || priceNum < 0) {
-                                errorMsg = "Item Name and valid Sale Price are required."
-                            } else {
-                                onSave(name.trim(), brand.trim(), code.trim(), category.trim(), unit.trim(), alertNum, priceNum, status)
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = name,
+                            onValueChange = { name = it; errorMsg = null },
+                            label = "Item Name",
+                            placeholder = "e.g. Basmati Rice 25kg or Premium Office Chair",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = brand,
+                                    onValueChange = { brand = it },
+                                    label = "Brand",
+                                    placeholder = "e.g. Kohinoor"
+                                )
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingItem != null) "Save Changes" else "Add Item", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = code,
+                                    onValueChange = { code = it; errorMsg = null },
+                                    label = "Item Code",
+                                    placeholder = "e.g. ITM-001",
+                                    isRequired = true
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = category,
+                                    onValueChange = { category = it; errorMsg = null },
+                                    label = "Category",
+                                    placeholder = "e.g. Groceries",
+                                    isRequired = true
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = unit,
+                                    onValueChange = { unit = it },
+                                    label = "Unit",
+                                    placeholder = "e.g. Pcs, Bag, Bottle"
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppNumberField(
+                                    value = lowStockAlert,
+                                    onValueChange = { lowStockAlert = it },
+                                    label = "Low Stock Alert",
+                                    placeholder = "5"
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppNumberField(
+                                    value = salePrice,
+                                    onValueChange = { salePrice = it; errorMsg = null },
+                                    label = "Sale Price (₹)",
+                                    placeholder = "45.99",
+                                    isRequired = true,
+                                    allowDecimal = true
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppDropdown(
+                            value = status,
+                            onValueChange = { status = it },
+                            label = "Status",
+                            options = listOf("Active", "Low Stock", "Draft", "Inactive"),
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingItem != null) "Save Changes" else "Add Item",
+                            onClick = {
+                                if (name.isBlank()) {
+                                    errorMsg = "Item Name is required."
+                                    return@AppFormButton
+                                }
+                                if (code.isBlank()) {
+                                    errorMsg = "Item Code is required."
+                                    return@AppFormButton
+                                }
+                                if (category.isBlank()) {
+                                    errorMsg = "Category is required."
+                                    return@AppFormButton
+                                }
+                                val priceNum = salePrice.toDoubleOrNull()
+                                if (priceNum == null || priceNum < 0) {
+                                    errorMsg = "Please enter a valid sale price."
+                                    return@AppFormButton
+                                }
+                                val alertNum = lowStockAlert.toIntOrNull() ?: 5
+                                onSave(name.trim(), brand.trim(), code.trim(), category.trim(), unit.trim().ifEmpty { "Pcs" }, alertNum, priceNum, status)
+                            }
+                        )
                     }
                 }
             }
         }
     }
 }
+

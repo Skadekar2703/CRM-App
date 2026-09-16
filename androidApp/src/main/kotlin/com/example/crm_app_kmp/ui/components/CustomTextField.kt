@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.crm_app_kmp.ui.theme.BorderLight
 import com.example.crm_app_kmp.ui.theme.ErrorRed
-import com.example.crm_app_kmp.ui.theme.InputBackground
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
 import com.example.crm_app_kmp.ui.theme.TextPrimary

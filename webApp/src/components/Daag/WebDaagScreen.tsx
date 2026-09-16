@@ -13,6 +13,8 @@ export const WebDaagScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const [availableItems, setAvailableItems] = useState<{ id: string; name: string; sku?: string }[]>([]);
+  const [availableTransports, setAvailableTransports] = useState<{ id: string; name: string }[]>([]);
+  const [availableSuppliers, setAvailableSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -32,6 +34,12 @@ export const WebDaagScreen: React.FC = () => {
     try {
       setIsLoading(true);
       const { data: itemData } = await supabase.from('items').select('*');
+      const { data: transData } = await supabase.from('transports').select('*');
+      const { data: suppData } = await supabase.from('suppliers').select('*');
+
+      if (transData) setAvailableTransports(transData.map((t: any) => ({ id: t.id, name: t.name || t.transportName })));
+      if (suppData) setAvailableSuppliers(suppData.map((s: any) => ({ id: s.id, name: s.name })));
+
       let itemMovements: WebStockMovement[] = [];
       if (itemData && itemData.length > 0) {
         setAvailableItems(itemData.map((i: any) => ({ id: i.id, name: i.name, sku: i.sku || i.code })));
@@ -527,6 +535,8 @@ export const WebDaagScreen: React.FC = () => {
           isOpen={isModalOpen}
           editingMovement={editingMovement}
           availableItems={availableItems}
+          availableTransports={availableTransports}
+          availableSuppliers={availableSuppliers}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveMovement}
         />

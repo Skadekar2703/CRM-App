@@ -70,3 +70,29 @@ object EmployeeRepository {
         }
     }
 }
+
+@JsExport
+object EmployeeValidation {
+    fun validateName(name: String): String? {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return "Full Name is required."
+        return null
+    }
+
+    fun validateMobile(mobile: String): String? {
+        val trimmed = mobile.trim()
+        if (trimmed.isBlank()) return "Mobile Number is required."
+        val digitsOnly = trimmed.filter { it.isDigit() }
+        if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+            return "Mobile Number must contain a valid phone number (7 to 15 digits)."
+        }
+        return null
+    }
+
+    fun validateJoinedOn(joinedOn: String): String? {
+        val trimmed = joinedOn.trim()
+        if (trimmed.isBlank()) return "Joined On date is required."
+        return null
+    }
+}
+

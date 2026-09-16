@@ -20,9 +20,9 @@ struct IOSCategoriesContentView: View {
     @State private var showFormSheet = false
     @State private var editingCategory: IOSCategory? = nil
     @State private var deleteTargetCategory: IOSCategory? = nil
-    @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
     @State private var errorToastMsg: String? = nil
+    @State private var userRole: String = "STAFF"
 
     @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
@@ -155,13 +155,17 @@ struct IOSCategoriesContentView: View {
                             ForEach(filteredCategories) { cat in
                                 IOSCategoryCard(
                                     category: cat,
+                                    userRole: userRole,
                                     onEdit: {
                                         editingCategory = cat
                                         showFormSheet = true
                                     },
                                     onDelete: {
-                                        deleteTargetCategory = cat
-                                        showDeleteAlert = true
+                                        if userRole == "ADMIN" {
+                                            deleteTargetCategory = cat
+                                        } else {
+                                            errorToastMsg = "Only Admin can delete categories."
+                                        }
                                     }
                                 )
                             }
@@ -212,40 +216,37 @@ struct IOSCategoriesContentView: View {
                 }
             )
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Category"),
-                message: Text("Are you sure you want to delete '\(deleteTargetCategory?.name ?? "")'?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deleteTargetCategory {
-                        // Delete safety check against customers table
-                        SupabaseIOSClient.shared.fetchTable(table: "customers") { custRes in
-                            var isAssigned = false
-                            if case .success(let items) = custRes {
-                                for item in items {
-                                    let cCat = item["category"] as? String ?? ""
-                                    let cCatId = item["category_id"] as? String ?? ""
-                                    if cCat.caseInsensitiveCompare(target.name) == .orderedSame || cCatId == target.id {
-                                        isAssigned = true
-                                        break
-                                    }
-                                }
-                            }
-
-                            DispatchQueue.main.async {
-                                if isAssigned {
-                                    self.errorToastMsg = "This category is assigned to customers and cannot be deleted."
-                                } else {
-                                    SupabaseIOSClient.shared.deleteRecord(table: "categories", id: target.id) { _ in
-                                        self.fetchCategories()
-                                    }
-                                    self.toastMsg = "Category deleted"
+        .sheet(item: $deleteTargetCategory) { target in
+            IOSThreeStepDeleteSheet(
+                itemName: "Category: \(target.name)",
+                itemDetails: "ID: \(target.id) | Status: \(target.status)",
+                userRole: userRole,
+                onConfirmDelete: {
+                    SupabaseIOSClient.shared.fetchTable(table: "customers") { custRes in
+                        var isAssigned = false
+                        if case .success(let items) = custRes {
+                            for item in items {
+                                let cCat = item["category"] as? String ?? ""
+                                let cCatId = item["category_id"] as? String ?? ""
+                                if cCat.caseInsensitiveCompare(target.name) == .orderedSame || cCatId == target.id {
+                                    isAssigned = true
+                                    break
                                 }
                             }
                         }
+
+                        DispatchQueue.main.async {
+                            if isAssigned {
+                                self.errorToastMsg = "This category is assigned to customers and cannot be deleted."
+                            } else {
+                                SupabaseIOSClient.shared.deleteRecord(table: "categories", id: target.id) { _ in
+                                    self.fetchCategories()
+                                }
+                                self.toastMsg = "Category deleted"
+                            }
+                        }
                     }
-                },
-                secondaryButton: .cancel()
+                }
             )
         }
     }
@@ -260,6 +261,7 @@ struct IOSCategory: Identifiable {
 
 struct IOSCategoryCard: View {
     let category: IOSCategory
+    var userRole: String = "STAFF"
     var onEdit: () -> Void
     var onDelete: () -> Void
 
@@ -309,9 +311,11 @@ struct IOSCategoryCard: View {
                     Image(systemName: "pencil")
                         .foregroundColor(.blue)
                 }
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
+                if userRole.uppercased() == "ADMIN" {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                    }
                 }
             }
             .padding(.leading, 8)

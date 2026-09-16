@@ -15,12 +15,14 @@ export interface WebCostProfitBreakdownData {
 export interface WebProfitLossReport {
   fromDate: string;
   toDate: string;
+  udhaari: number;
+  jama: number;
+  salaries: number;
+  netProfit: number;
   revenue: number;
   purchases: number;
   expenses: number;
-  salaries: number;
   expensesPlusSalaries: number;
-  netProfit: number;
   isLoss: boolean;
   statementItems: WebPLStatementItem[];
   breakdown: WebCostProfitBreakdownData;

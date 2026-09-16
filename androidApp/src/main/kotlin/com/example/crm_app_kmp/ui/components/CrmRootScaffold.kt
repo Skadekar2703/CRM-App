@@ -260,10 +260,14 @@ fun CrmRootScaffold(
                         }
                     }
                 }
+            },
+            bottomBar = {
+                AppBottomNavigationBar(
+                    activeSection = activeSection,
+                    onNavigateSection = onNavigateSection
+                )
             }
         ) { innerPadding ->
-            var showAiDialog by remember { mutableStateOf(false) }
-
             // SCREEN CONTENT IS PLACED STRICTLY BELOW TOP APP BAR WITHOUT CUTOFF
             Box(
                 modifier = Modifier
@@ -272,23 +276,6 @@ fun CrmRootScaffold(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 content()
-
-                // GLOBAL FLOATING AI ASSISTANT BUTTON (BOTTOM-RIGHT ON EVERY SCREEN)
-                androidx.compose.material3.ExtendedFloatingActionButton(
-                    onClick = { showAiDialog = true },
-                    containerColor = Color(0xFF7C3AED),
-                    contentColor = Color.White,
-                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    text = { Text("AI Assistant", fontWeight = FontWeight.Bold, fontSize = 13.sp) },
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 80.dp, end = 16.dp)
-                )
-
-                if (showAiDialog) {
-                    com.example.crm_app_kmp.ui.ai.AndroidAiChatDialog(onDismiss = { showAiDialog = false })
-                }
             }
         }
     }

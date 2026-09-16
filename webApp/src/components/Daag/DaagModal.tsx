@@ -7,10 +7,17 @@ interface ItemOption {
   sku?: string;
 }
 
+interface DropdownOption {
+  id: string;
+  name: string;
+}
+
 interface DaagModalProps {
   isOpen: boolean;
   editingMovement: WebStockMovement | null;
   availableItems?: ItemOption[];
+  availableTransports?: DropdownOption[];
+  availableSuppliers?: DropdownOption[];
   onClose: () => void;
   onSave: (
     direction: 'IN' | 'OUT',
@@ -29,6 +36,8 @@ export const DaagModal: React.FC<DaagModalProps> = ({
   isOpen,
   editingMovement,
   availableItems = [],
+  availableTransports = [],
+  availableSuppliers = [],
   onClose,
   onSave
 }) => {
@@ -64,8 +73,8 @@ export const DaagModal: React.FC<DaagModalProps> = ({
       }
       setQuantity('');
       setAmount('0');
-      setSupplier('');
-      setTransport('');
+      setSupplier(availableSuppliers.length > 0 ? availableSuppliers[0].name : '');
+      setTransport(availableTransports.length > 0 ? availableTransports[0].name : '');
       setStatus('Pending');
       setDate('Today');
     }
@@ -202,24 +211,55 @@ export const DaagModal: React.FC<DaagModalProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="form-group">
-              <label>Supplier (Optional)</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Sharma Wholesale"
-                value={supplier}
-                onChange={(e) => setSupplier(e.target.value)}
-              />
+              <label>Supplier / Party</label>
+              {availableSuppliers.length > 0 ? (
+                <select
+                  className="form-control"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                >
+                  <option value="">-- Select Supplier --</option>
+                  {availableSuppliers.map((sup) => (
+                    <option key={sup.id} value={sup.name}>
+                      {sup.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Sharma Wholesale"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                />
+              )}
             </div>
+
             <div className="form-group">
               <label>Transport / Carrier</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="VRL Logistics"
-                value={transport}
-                onChange={(e) => setTransport(e.target.value)}
-              />
+              {availableTransports.length > 0 ? (
+                <select
+                  className="form-control"
+                  value={transport}
+                  onChange={(e) => setTransport(e.target.value)}
+                >
+                  <option value="">-- Select Transport --</option>
+                  {availableTransports.map((tr) => (
+                    <option key={tr.id} value={tr.name}>
+                      {tr.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="VRL Logistics"
+                  value={transport}
+                  onChange={(e) => setTransport(e.target.value)}
+                />
+              )}
             </div>
           </div>
 

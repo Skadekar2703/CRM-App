@@ -1,6 +1,7 @@
 package com.example.crm_app_kmp.ui.dashboard
 
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -47,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.crm_app_kmp.auth.UserSession
@@ -104,12 +106,14 @@ fun AndroidDashboardScreen(
             "Dashboard", "Home" -> DashboardMainContent(
                 userSession = userSession,
                 onLogout = onLogout,
-                onNavigateSection = { activeSection = it }
+                onNavigateSection = { activeSection = it },
+                isDarkTheme = isDarkTheme
             )
             "Areas" -> com.example.crm_app_kmp.ui.areas.AndroidAreasScreen()
             "Categories" -> com.example.crm_app_kmp.ui.categories.AndroidCategoriesContent()
+            "Sales" -> com.example.crm_app_kmp.ui.sales.SalesScreen()
             "Items" -> com.example.crm_app_kmp.ui.items.AndroidItemsContent()
-            "Transports" -> com.example.crm_app_kmp.ui.transports.AndroidTransportsContent()
+            "Transports", "Transport" -> com.example.crm_app_kmp.ui.transports.AndroidTransportsContent()
             "Udhaari" -> com.example.crm_app_kmp.ui.udhaari.AndroidUdhaariContent()
             "Cheques" -> com.example.crm_app_kmp.ui.cheques.AndroidChequesContent()
             "Customers" -> com.example.crm_app_kmp.ui.customers.AndroidCustomersContent()
@@ -130,11 +134,11 @@ fun AndroidDashboardScreen(
                     DashboardMainContent(
                         userSession = userSession,
                         onLogout = onLogout,
-                        onNavigateSection = { activeSection = it }
+                        onNavigateSection = { activeSection = it },
+                        isDarkTheme = isDarkTheme
                     )
                 }
             }
-            "Settings" -> com.example.crm_app_kmp.ui.settings.AndroidSettingsContent()
             "Sign Out" -> {
                 onLogout()
             }
@@ -147,7 +151,8 @@ fun AndroidDashboardScreen(
 private fun DashboardMainContent(
     userSession: UserSession,
     onLogout: () -> Unit,
-    onNavigateSection: (String) -> Unit = {}
+    onNavigateSection: (String) -> Unit = {},
+    isDarkTheme: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val supabaseClient = remember { com.example.crm_app_kmp.data.SupabaseAndroidClient(context) }
@@ -410,6 +415,32 @@ private fun DashboardMainContent(
         }
 
         // FOUR PRIMARY SHORTCUTS
+        val isDark = isDarkTheme || MaterialTheme.colorScheme.background == Color(0xFF080D1A)
+
+        val customerContainer = if (isDark) Color(0xFF241D08) else Color(0xFFFEFCE8)
+        val customerBorder = if (isDark) Color(0xFF713F12) else Color(0xFFFEF08A)
+        val customerIconColor = if (isDark) Color(0xFFFACC15) else Color(0xFFCA8A04)
+        val customerIconBg = if (isDark) Color(0xFF382A0C) else Color(0xFFFEF9C3)
+        val customerSubColor = if (isDark) Color(0xFFEAB308) else Color(0xFFA16207)
+
+        val udhaariContainer = if (isDark) Color(0xFF280D10) else Color(0xFFFEF2F2)
+        val udhaariBorder = if (isDark) Color(0xFF7F1D1D) else Color(0xFFFECACA)
+        val udhaariIconColor = if (isDark) Color(0xFFF87171) else Color(0xFFDC2626)
+        val udhaariIconBg = if (isDark) Color(0xFF451117) else Color(0xFFFEE2E2)
+        val udhaariSubColor = if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
+
+        val jamaContainer = if (isDark) Color(0xFF092315) else Color(0xFFF0FDF4)
+        val jamaBorder = if (isDark) Color(0xFF14532D) else Color(0xFFBBF7D0)
+        val jamaIconColor = if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
+        val jamaIconBg = if (isDark) Color(0xFF123D22) else Color(0xFFDCFCE7)
+        val jamaSubColor = if (isDark) Color(0xFF86EFAC) else Color(0xFF15803D)
+
+        val daagContainer = if (isDark) Color(0xFF0B1B36) else Color(0xFFEFF6FF)
+        val daagBorder = if (isDark) Color(0xFF1E3A8A) else Color(0xFFBFDBFE)
+        val daagIconColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+        val daagIconBg = if (isDark) Color(0xFF172E54) else Color(0xFFDBEAFE)
+        val daagSubColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
+
         Text("PRIMARY ACTIONS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -417,22 +448,24 @@ private fun DashboardMainContent(
                 StitchShortcutCard(
                     title = "+ Customer",
                     sub = "Add new party",
-                    containerColor = Color(0xFFF0FDF4),
-                    borderColor = Color(0xFFBBF7D0),
-                    iconColor = Color(0xFF15803D),
-                    iconBg = Color(0xFFDCFCE7),
+                    containerColor = customerContainer,
+                    borderColor = customerBorder,
+                    iconColor = customerIconColor,
+                    iconBg = customerIconBg,
+                    subColor = customerSubColor,
                     icon = Icons.Default.PersonAdd,
                     onClick = { onNavigateSection("Customers") },
                     modifier = Modifier.weight(1f)
                 )
 
                 StitchShortcutCard(
-                    title = "+ Udhar",
+                    title = "+ Udhaari",
                     sub = "Debit / Give credit",
-                    containerColor = Color(0xFFFEF2F2),
-                    borderColor = Color(0xFFFECACA),
-                    iconColor = Color(0xFFB91C1C),
-                    iconBg = Color(0xFFFEE2E2),
+                    containerColor = udhaariContainer,
+                    borderColor = udhaariBorder,
+                    iconColor = udhaariIconColor,
+                    iconBg = udhaariIconBg,
+                    subColor = udhaariSubColor,
                     icon = Icons.Default.Add,
                     onClick = { onNavigateSection("Udhaari") },
                     modifier = Modifier.weight(1f)
@@ -443,10 +476,11 @@ private fun DashboardMainContent(
                 StitchShortcutCard(
                     title = "+ Jama",
                     sub = "Credit / Receive payment",
-                    containerColor = Color(0xFFECFDF5),
-                    borderColor = Color(0xFFA7F3D0),
-                    iconColor = Color(0xFF047857),
-                    iconBg = Color(0xFFD1FAE5),
+                    containerColor = jamaContainer,
+                    borderColor = jamaBorder,
+                    iconColor = jamaIconColor,
+                    iconBg = jamaIconBg,
+                    subColor = jamaSubColor,
                     icon = Icons.Default.AttachMoney,
                     onClick = { onNavigateSection("Udhaari") },
                     modifier = Modifier.weight(1f)
@@ -455,10 +489,11 @@ private fun DashboardMainContent(
                 StitchShortcutCard(
                     title = "+ Daag",
                     sub = "Record stock dispatch",
-                    containerColor = Color(0xFFEFF6FF),
-                    borderColor = Color(0xFFBFDBFE),
-                    iconColor = Color(0xFF1D4ED8),
-                    iconBg = Color(0xFFDBEAFE),
+                    containerColor = daagContainer,
+                    borderColor = daagBorder,
+                    iconColor = daagIconColor,
+                    iconBg = daagIconBg,
+                    subColor = daagSubColor,
                     icon = Icons.Default.LocalShipping,
                     onClick = { onNavigateSection("Daag") },
                     modifier = Modifier.weight(1f)
@@ -615,33 +650,65 @@ private fun StitchShortcutCard(
     borderColor: Color,
     iconColor: Color,
     iconBg: Color,
+    subColor: Color = iconColor.copy(alpha = 0.8f),
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = modifier
+            .height(84.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top
         ) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(iconBg),
+                    .background(iconBg)
+                    .align(Alignment.CenterVertically),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp)
+                )
             }
             Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = iconColor)
-                Text(sub, fontSize = 11.sp, color = iconColor.copy(alpha = 0.8f))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 2.dp),
+                verticalArrangement = Arrangement.Top
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = iconColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = sub,
+                    fontSize = 10.5.sp,
+                    color = subColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 13.5.sp
+                )
             }
         }
     }

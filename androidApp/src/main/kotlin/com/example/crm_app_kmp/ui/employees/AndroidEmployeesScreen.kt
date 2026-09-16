@@ -3,6 +3,8 @@ package com.example.crm_app_kmp.ui.employees
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +26,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDatePicker
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppEmailField
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppNumberField
+import com.example.crm_app_kmp.ui.components.AppPhoneField
+import com.example.crm_app_kmp.ui.components.AppTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
@@ -65,6 +75,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.crm_app_kmp.data.SupabaseAndroidClient
 import com.example.crm_app_kmp.employees.EmployeeModel
 import com.example.crm_app_kmp.employees.EmployeeTransactionModel
+import com.example.crm_app_kmp.ui.components.CrmRootScaffold
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -111,6 +123,7 @@ fun AndroidEmployeesContent() {
     var txType by remember { mutableStateOf("Gift") }
 
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    var userRole by remember { mutableStateOf("STAFF") }
 
     val loadData: () -> Unit = {
         scope.launch {
@@ -191,6 +204,7 @@ fun AndroidEmployeesContent() {
     }
 
     LaunchedEffect(Unit) {
+        userRole = supabaseClient.getUserRole()
         loadData()
     }
 
@@ -324,7 +338,8 @@ fun AndroidEmployeesContent() {
                         },
                         onDelete = {
                             deletingEmployee = employee
-                        }
+                        },
+                        userRole = userRole
                     )
                 }
             }
@@ -354,50 +369,45 @@ fun AndroidEmployeesContent() {
             onDismiss = { showFormDialog = false },
             onSave = { empJson ->
                 scope.launch {
-                    val baseJson = JSONObject().apply {
-                        put("name", empJson.optString("name"))
-                        put("role", empJson.optString("role"))
-                        put("mobile", empJson.optString("mobile"))
-                        put("email", empJson.optString("email"))
-                        put("status", "Active")
+                    val currentJson = JSONObject(empJson.toString())
+                    var success = false
+                    var lastErrorMsg = ""
+
+                    for (attempt in 0..5) {
+                        val res = if (editingEmployee != null) {
+                            supabaseClient.updateRecord("employees", editingEmployee!!.id, currentJson)
+                        } else {
+                            supabaseClient.insertRecord("employees", currentJson)
+                        }
+
+                        if (res.isSuccess) {
+                            success = true
+                            toastMsg = if (editingEmployee != null) {
+                                "Employee '${currentJson.optString("name")}' updated successfully."
+                            } else {
+                                "Employee '${currentJson.optString("name")}' added successfully."
+                            }
+                            loadData()
+                            break
+                        } else {
+                            val err = res.exceptionOrNull()
+                            val msg = err?.message ?: "Unknown error"
+                            lastErrorMsg = msg
+
+                            val match = Regex("Could not find the '([^']+)' column").find(msg)
+                                ?: Regex("column \"([^\"]+)\" of relation \"employees\" does not exist").find(msg)
+
+                            if (match != null) {
+                                val col = match.groupValues[1]
+                                currentJson.remove(col)
+                                continue
+                            }
+                            break
+                        }
                     }
 
-                    if (editingEmployee != null) {
-                        val res = supabaseClient.updateRecord("employees", editingEmployee!!.id, empJson)
-                        res.onSuccess {
-                            toastMsg = "Employee '${empJson.optString("name")}' updated."
-                            loadData()
-                        }.onFailure { err ->
-                            if (err.message?.contains("column") == true || err.message?.contains("schema cache") == true) {
-                                scope.launch {
-                                    val retry = supabaseClient.updateRecord("employees", editingEmployee!!.id, baseJson)
-                                    retry.onSuccess {
-                                        toastMsg = "Employee updated (Base fields). Run SQL script for extended fields."
-                                        loadData()
-                                    }.onFailure { e -> toastMsg = "Error: ${e.message}" }
-                                }
-                            } else {
-                                toastMsg = "Error updating: ${err.message}"
-                            }
-                        }
-                    } else {
-                        val res = supabaseClient.insertRecord("employees", empJson)
-                        res.onSuccess {
-                            toastMsg = "Employee '${empJson.optString("name")}' added."
-                            loadData()
-                        }.onFailure { err ->
-                            if (err.message?.contains("column") == true || err.message?.contains("schema cache") == true) {
-                                scope.launch {
-                                    val retry = supabaseClient.insertRecord("employees", baseJson)
-                                    retry.onSuccess {
-                                        toastMsg = "Employee added (Base fields). Run SQL script for extended fields."
-                                        loadData()
-                                    }.onFailure { e -> toastMsg = "Error: ${e.message}" }
-                                }
-                            } else {
-                                toastMsg = "Error adding: ${err.message}"
-                            }
-                        }
+                    if (!success) {
+                        toastMsg = "Error: $lastErrorMsg"
                     }
                     showFormDialog = false
                 }
@@ -445,55 +455,23 @@ fun AndroidEmployeesContent() {
 
     // DELETE CONFIRMATION DIALOG
     deletingEmployee?.let { target ->
-        Dialog(onDismissRequest = { deletingEmployee = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Employee?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete '${target.name}' (${target.role})?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { deletingEmployee = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    supabaseClient.deleteRecord("employees", target.id)
-                                    toastMsg = "Employee '${target.name}' deleted."
-                                    if (selectedEmployeeDetails?.id == target.id) {
-                                        selectedEmployeeDetails = null
-                                    }
-                                    loadData()
-                                    deletingEmployee = null
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
+        ThreeStepDeleteDialog(
+            itemName = "Employee: ${target.name}",
+            itemDetails = "Role: ${target.role} | Mobile: ${target.mobile}",
+            userRole = userRole,
+            onDismiss = { deletingEmployee = null },
+            onConfirmDelete = {
+                scope.launch {
+                    supabaseClient.deleteRecord("employees", target.id)
+                    toastMsg = "Employee '${target.name}' deleted."
+                    if (selectedEmployeeDetails?.id == target.id) {
+                        selectedEmployeeDetails = null
                     }
+                    loadData()
+                    deletingEmployee = null
                 }
             }
-        }
+        )
     }
 
     // DETAILED PROFILE DIALOG
@@ -655,7 +633,8 @@ private fun EmployeeCard(
     onCardClick: () -> Unit,
     onCall: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    userRole: String = "STAFF"
 ) {
     val initials = employee.name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
     val isUdhaarPositive = employee.udhaarBalance > 0
@@ -714,16 +693,18 @@ private fun EmployeeCard(
                     )
                 }
 
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = ErrorRed.copy(alpha = 0.7f),
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (userRole.equals("ADMIN", ignoreCase = true)) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = ErrorRed.copy(alpha = 0.7f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
@@ -826,43 +807,69 @@ private fun EmployeeFormDialog(
     onDismiss: () -> Unit,
     onSave: (JSONObject) -> Unit
 ) {
-    var uid by remember { mutableStateOf(editingEmployee?.uid ?: "EMP-${(100..999).random()}") }
+    var uid by remember { mutableStateOf(editingEmployee?.uid ?: "EMP-${(1000..9999).random()}") }
+    var photoUrl by remember { mutableStateOf(editingEmployee?.photoUrl ?: "") }
     var name by remember { mutableStateOf(editingEmployee?.name ?: "") }
-    var role by remember { mutableStateOf(editingEmployee?.role ?: "Staff") }
     var mobile by remember { mutableStateOf(editingEmployee?.mobile ?: "") }
     var email by remember { mutableStateOf(editingEmployee?.email ?: "") }
+    var role by remember { mutableStateOf(editingEmployee?.role ?: "Staff") }
+    var status by remember { mutableStateOf(editingEmployee?.status ?: "Active") }
     var salaryType by remember { mutableStateOf(editingEmployee?.salaryType ?: "Monthly") }
-    var salaryText by remember { mutableStateOf(if ((editingEmployee?.salary ?: 0.0) > 0) editingEmployee?.salary?.toInt().toString() else "") }
+    var salaryText by remember { mutableStateOf(if ((editingEmployee?.salary ?: 0.0) > 0) editingEmployee?.salary?.toInt()?.toString() ?: "" else "") }
+    var joinedOn by remember { mutableStateOf(editingEmployee?.joinedOn?.take(10)?.ifBlank { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
+    var leftOn by remember { mutableStateOf(editingEmployee?.leftOn?.take(10) ?: "") }
     var bankName by remember { mutableStateOf(editingEmployee?.bankName ?: "") }
     var bankAccount by remember { mutableStateOf(editingEmployee?.bankAccount ?: "") }
     var idNumber by remember { mutableStateOf(editingEmployee?.idNumber ?: "") }
     var emergencyContact by remember { mutableStateOf(editingEmployee?.emergencyContact ?: "") }
-    var joinedOn by remember { mutableStateOf(editingEmployee?.joinedOn ?: SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
+    var address by remember { mutableStateOf(editingEmployee?.address ?: "") }
     var remark by remember { mutableStateOf(editingEmployee?.remark ?: "") }
+
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var isUploadingPhoto by remember { mutableStateOf(false) }
 
-    val calendar = Calendar.getInstance()
+    val scope = rememberCoroutineScope()
+    val supabaseClient = remember { SupabaseAndroidClient(context) }
 
-    val showDatePicker = {
-        val dlg = DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val cal = Calendar.getInstance()
-                cal.set(year, month, dayOfMonth)
-                joinedOn = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        )
-        dlg.show()
+    val photoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            scope.launch {
+                isUploadingPhoto = true
+                errorMsg = null
+                try {
+                    val bytes = context.contentResolver.openInputStream(selectedUri)?.use { it.readBytes() }
+                    if (bytes != null) {
+                        val fileName = "emp_${System.currentTimeMillis()}.jpg"
+                        val uploadRes = supabaseClient.uploadEmployeePhoto(bytes, fileName)
+                        uploadRes.onSuccess { url ->
+                            photoUrl = url
+                        }.onFailure { err ->
+                            errorMsg = "Photo upload failed: ${err.message}"
+                        }
+                    } else {
+                        errorMsg = "Failed to read image file."
+                    }
+                } catch (e: Exception) {
+                    errorMsg = "Error reading image: ${e.message}"
+                } finally {
+                    isUploadingPhoto = false
+                }
+            }
+        }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .heightIn(max = 680.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -877,13 +884,13 @@ private fun EmployeeFormDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (editingEmployee != null) "Edit Employee Profile" else "Add Employee Profile",
+                        text = if (editingEmployee != null) "Edit Employee Profile" else "Add New Employee",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
                     }
                 }
 
@@ -891,145 +898,167 @@ private fun EmployeeFormDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Employee Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                // 1. EMPLOYEE PHOTO
+                com.example.crm_app_kmp.ui.components.AppImagePicker(
+                    label = "Employee Photo",
+                    photoUrl = photoUrl,
+                    isUploading = isUploadingPhoto,
+                    onPickImage = { photoLauncher.launch("image/*") },
+                    onRemoveImage = { photoUrl = "" }
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = mobile,
-                        onValueChange = { mobile = it },
-                        placeholder = { Text("Mobile Number *", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = role,
-                        onValueChange = { role = it },
-                        placeholder = { Text("Role / Designation", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                // 2. FULL NAME *
+                AppTextField(
+                    label = "Full Name",
+                    value = name,
+                    onValueChange = { name = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. Ravi Kumar"
+                )
 
-                // SALARY TYPE & SALARY AMOUNT
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(modifier = Modifier.weight(1.2f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("Monthly", "Per Day").forEach { st ->
-                            val isSel = salaryType.equals(st, ignoreCase = true)
-                            Button(
-                                onClick = { salaryType = st },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSel) PrimaryBlue else Color(0xFFF1F5F9),
-                                    contentColor = if (isSel) Color.White else TextPrimary
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                            ) {
-                                Text(st, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
+                // 3. MOBILE NUMBER *
+                AppPhoneField(
+                    label = "Mobile Number",
+                    value = mobile,
+                    onValueChange = { mobile = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. +91 98765 43210"
+                )
+
+                // 4. ROLE / DESIGNATION
+                AppDropdown(
+                    label = "Role / Designation",
+                    selectedValue = role,
+                    options = listOf("Helper", "Labour", "Driver", "Staff", "Manager", "Operator"),
+                    onSelect = { role = it }
+                )
+
+                // 5. STATUS
+                AppDropdown(
+                    label = "Status",
+                    selectedValue = status,
+                    options = listOf("Active", "Inactive"),
+                    onSelect = { status = it }
+                )
+
+                // 6. SALARY TYPE
+                AppDropdown(
+                    label = "Salary Type",
+                    selectedValue = salaryType,
+                    options = listOf("Monthly", "Per Day"),
+                    onSelect = { selectedType ->
+                        salaryType = selectedType
                     }
+                )
 
-                    OutlinedTextField(
-                        value = salaryText,
-                        onValueChange = { salaryText = it },
-                        placeholder = { Text(if (salaryType == "Per Day") "Daily Rate (₹)" else "Monthly Salary (₹)", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                // 7. SALARY / RATE
+                AppNumberField(
+                    label = "Salary / Rate (₹)",
+                    value = salaryText,
+                    onValueChange = { salaryText = it },
+                    placeholder = "e.g. 25000 or 850"
+                )
 
-                // DATE PICKER ROW
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showDatePicker() }
-                        .border(1.dp, TextMuted.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Joined On Date *", fontSize = 11.sp, color = TextMuted)
-                        Text(formatDateDisplay(joinedOn), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    }
-                    Icon(Icons.Default.CalendarToday, contentDescription = "Calendar Picker", tint = PrimaryBlue)
-                }
+                // 8. JOINED ON *
+                AppDatePicker(
+                    label = "Joined On",
+                    value = joinedOn,
+                    onDateSelected = { joinedOn = it; errorMsg = null },
+                    required = true,
+                    placeholder = "YYYY-MM-DD"
+                )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = bankName,
-                        onValueChange = { bankName = it },
-                        placeholder = { Text("Bank Name", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = bankAccount,
-                        onValueChange = { bankAccount = it },
-                        placeholder = { Text("Bank A/C No", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                // 9. LEFT ON
+                AppDatePicker(
+                    label = "Left On (Optional)",
+                    value = leftOn,
+                    onDateSelected = { leftOn = it },
+                    required = false,
+                    placeholder = "Select date"
+                )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = idNumber,
-                        onValueChange = { idNumber = it },
-                        placeholder = { Text("CNIC / ID No", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = emergencyContact,
-                        onValueChange = { emergencyContact = it },
-                        placeholder = { Text("Emergency Contact", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                // 10. BANK NAME
+                AppTextField(
+                    label = "Bank Name",
+                    value = bankName,
+                    onValueChange = { bankName = it },
+                    placeholder = "e.g. HDFC Bank"
+                )
 
-                OutlinedTextField(
+                // 11. BANK ACCOUNT / IBAN
+                AppTextField(
+                    label = "Bank Account / IBAN",
+                    value = bankAccount,
+                    onValueChange = { bankAccount = it },
+                    placeholder = "e.g. 5010023456789"
+                )
+
+                // 12. ID / CNIC / IDENTITY NO
+                AppTextField(
+                    label = "ID / CNIC / Identity No",
+                    value = idNumber,
+                    onValueChange = { idNumber = it },
+                    placeholder = "e.g. AADH-9876-1234"
+                )
+
+                // 13. EMERGENCY CONTACT
+                AppPhoneField(
+                    label = "Emergency Contact",
+                    value = emergencyContact,
+                    onValueChange = { emergencyContact = it },
+                    placeholder = "e.g. +91 98111 22233"
+                )
+
+                // 14. ADDRESS
+                AppTextField(
+                    label = "Address",
+                    value = address,
+                    onValueChange = { address = it },
+                    singleLine = false,
+                    minLines = 2,
+                    placeholder = "e.g. House #45, Industrial Area, Sector 5"
+                )
+
+                // 15. REMARK / NOTES
+                AppTextField(
+                    label = "Remark / Notes",
                     value = remark,
                     onValueChange = { remark = it },
-                    placeholder = { Text("Remark / Notes", fontSize = 13.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    singleLine = false,
+                    minLines = 2,
+                    placeholder = "e.g. Skilled machine operator, shifts day/night"
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = if (editingEmployee != null) "Save Changes" else "Add Employee",
                         onClick = {
-                            if (name.isBlank()) {
-                                errorMsg = "Employee Name is required."
+                            val nameErr = com.example.crm_app_kmp.employees.EmployeeValidation.validateName(name)
+                            val mobileErr = com.example.crm_app_kmp.employees.EmployeeValidation.validateMobile(mobile)
+                            val joinedErr = com.example.crm_app_kmp.employees.EmployeeValidation.validateJoinedOn(joinedOn)
+
+                            if (nameErr != null) {
+                                errorMsg = nameErr
+                            } else if (mobileErr != null) {
+                                errorMsg = mobileErr
+                            } else if (joinedErr != null) {
+                                errorMsg = joinedErr
+                            } else if (isUploadingPhoto) {
+                                errorMsg = "Photo is still uploading. Please wait a moment..."
                             } else {
                                 val salVal = salaryText.toDoubleOrNull() ?: 0.0
                                 val json = JSONObject().apply {
@@ -1037,25 +1066,24 @@ private fun EmployeeFormDialog(
                                     put("name", name.trim())
                                     put("role", role.trim())
                                     put("mobile", mobile.trim())
-                                    put("email", email.trim())
+                                    if (email.isNotBlank()) put("email", email.trim())
+                                    put("status", status)
+                                    put("joined_on", joinedOn)
+                                    if (leftOn.isNotBlank()) put("left_on", leftOn)
                                     put("salary", salVal)
                                     put("salary_type", salaryType)
                                     put("bank_name", bankName.trim())
                                     put("bank_account", bankAccount.trim())
                                     put("id_number", idNumber.trim())
                                     put("emergency_contact", emergencyContact.trim())
-                                    put("joined_on", joinedOn)
+                                    put("address", address.trim())
+                                    if (photoUrl.isNotBlank()) put("photo_url", photoUrl.trim())
                                     put("remark", remark.trim())
-                                    put("status", "Active")
                                 }
                                 onSave(json)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingEmployee != null) "Save Changes" else "Add Employee", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }
@@ -1076,23 +1104,6 @@ private fun EmployeeTransactionDialog(
     var note by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    val calendar = Calendar.getInstance()
-
-    val showDatePicker = {
-        val dlg = DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val cal = Calendar.getInstance()
-                cal.set(year, month, dayOfMonth)
-                dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        )
-        dlg.show()
-    }
-
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
@@ -1112,71 +1123,49 @@ private fun EmployeeTransactionDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                // TYPE SELECTOR
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Gift", "Bonus", "Employee Udhaar", "Udhaar Repayment", "Labour Expense").forEach { t ->
-                        val isSelected = selectedType == t
-                        Button(
-                            onClick = { selectedType = t },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) PrimaryBlue else Color(0xFFF1F5F9),
-                                contentColor = if (isSelected) Color.White else TextPrimary
-                            ),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.weight(1f).height(32.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Text(t.take(6), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    placeholder = { Text("Amount (₹) *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                AppDropdown(
+                    label = "Transaction Category",
+                    selectedValue = selectedType,
+                    options = listOf("Gift", "Bonus", "Extra Payment", "Employee Udhaar", "Udhaar Repayment", "Labour Expense"),
+                    onSelect = { selectedType = it },
+                    required = true
                 )
 
-                // DATE PICKER
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showDatePicker() }
-                        .border(1.dp, TextMuted.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Transaction Date", fontSize = 11.sp, color = TextMuted)
-                        Text(formatDateDisplay(dateStr), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    }
-                    Icon(Icons.Default.CalendarToday, contentDescription = "Calendar Picker", tint = PrimaryBlue)
-                }
+                AppNumberField(
+                    label = "Amount (₹)",
+                    value = amountText,
+                    onValueChange = { amountText = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. 5000"
+                )
 
-                OutlinedTextField(
+                AppDatePicker(
+                    label = "Transaction Date",
+                    value = dateStr,
+                    onDateSelected = { dateStr = it; errorMsg = null },
+                    required = true
+                )
+
+                AppTextField(
+                    label = "Note / Remarks",
                     value = note,
                     onValueChange = { note = it },
-                    placeholder = { Text("Note / Remarks", fontSize = 13.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    singleLine = false,
+                    minLines = 2,
+                    placeholder = "e.g. Festival bonus / Advance for emergency"
                 )
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Button(
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = "Save Entry",
                         onClick = {
                             val amt = amountText.toDoubleOrNull()
                             if (amt == null || amt <= 0) {
@@ -1192,12 +1181,8 @@ private fun EmployeeTransactionDialog(
                                 }
                                 onSave(json)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Save Entry", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }

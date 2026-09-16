@@ -17,6 +17,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppNumberField
+import com.example.crm_app_kmp.ui.components.AppPhoneField
+import com.example.crm_app_kmp.ui.components.AppTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -69,6 +74,7 @@ import com.example.crm_app_kmp.udhaari.UdhaariCustomerModel
 import com.example.crm_app_kmp.udhaari.UdhaariRepository
 import com.example.crm_app_kmp.udhaari.UdhaariTransactionModel
 import com.example.crm_app_kmp.ui.components.CrmRootScaffold
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -111,47 +117,40 @@ fun AndroidUdhaariContent() {
     var editingCustomer by remember { mutableStateOf<UdhaariCustomerModel?>(null) }
     var deletingCustomer by remember { mutableStateOf<UdhaariCustomerModel?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    var userRole by remember { mutableStateOf("STAFF") }
 
     fun refreshUdhaariCustomers() {
         scope.launch {
-            val res = supabaseClient.fetchTable("customers")
-            res.onSuccess { array ->
-                customersList.clear()
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    val rawBaki = obj.optDouble("baki", 0.0)
-                    val rawJama = obj.optDouble("jama", 0.0)
-                    val currentBaki = rawBaki - rawJama
-                    val rawPhoto = obj.optString("photo_url", "").trim()
-                    val photoUrl: String? = when {
-                        rawPhoto.isBlank() || rawPhoto.equals("null", ignoreCase = true) -> null
-                        rawPhoto.startsWith("http://") || rawPhoto.startsWith("https://") -> rawPhoto
-                        rawPhoto.startsWith("data:image") -> rawPhoto
-                        else -> supabaseClient.fetchSignedStorageUrl(rawPhoto)
-                    }
-
-                    customersList.add(
-                        UdhaariCustomerModel(
-                            uid = obj.optString("id", ""),
-                            name = obj.optString("name", "Customer"),
-                            mobile = obj.optString("phone", ""),
-                            area = obj.optString("area", "General Area"),
-                            category = obj.optString("category", "Regular"),
-                            cibilStatus = obj.optString("cibil_status", "Good"),
-                            baki = currentBaki,
-                            jama = rawJama,
-                            creditLimit = obj.optDouble("credit_limit", 100000.0),
-                            lastTxnDate = "Recent",
-                            status = obj.optString("status", "Active"),
-                            photoUrl = photoUrl
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val res = supabaseClient.fetchCustomers()
+                res.onSuccess { list ->
+                    val mappedList = list.map { c ->
+                        com.example.crm_app_kmp.udhaari.UdhaariCustomerModel(
+                            uid = c.id,
+                            name = c.name,
+                            mobile = c.mobile,
+                            area = c.area,
+                            category = c.category,
+                            cibilStatus = c.cibilStatus,
+                            baki = c.baki,
+                            jama = c.jama,
+                            creditLimit = c.creditLimit,
+                            lastTxnDate = c.lastTxnDate,
+                            status = c.status,
+                            photoUrl = c.photoUrl
                         )
-                    )
+                    }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        customersList.clear()
+                        customersList.addAll(mappedList)
+                    }
                 }
             }
         }
     }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
+        userRole = supabaseClient.getUserRole()
         refreshUdhaariCustomers()
     }
 
@@ -331,6 +330,7 @@ fun AndroidUdhaariContent() {
                     filteredCustomers.forEach { customer ->
                         MobileUdhaariCustomerCard(
                             customer = customer,
+                            userRole = userRole,
                             onAddBaki = {
                                 presetTxnType = "Baki"
                                 selectedTxnCustomerUid = customer.uid
@@ -452,6 +452,7 @@ fun AndroidUdhaariContent() {
         UdhaariHistoryDialog(
             customer = historyCustomer!!,
             supabaseClient = supabaseClient,
+            userRole = userRole,
             onDismiss = { showHistoryDialog = false },
             onRefresh = { refreshUdhaariCustomers() }
         )
@@ -459,57 +460,27 @@ fun AndroidUdhaariContent() {
 
     // DELETE CONFIRMATION DIALOG
     deletingCustomer?.let { target ->
-        Dialog(onDismissRequest = { deletingCustomer = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Customer?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete '${target.name}'?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = { deletingCustomer = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    supabaseClient.deleteRecord("customers", target.uid)
-                                    refreshUdhaariCustomers()
-                                }
-                                toastMsg = "Customer '${target.name}' deleted."
-                                deletingCustomer = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
+        ThreeStepDeleteDialog(
+            itemName = "Udhaari Record: ${target.name}",
+            itemDetails = "UID: ${target.uid} | Area: ${target.area}",
+            userRole = userRole,
+            onDismiss = { deletingCustomer = null },
+            onConfirmDelete = {
+                scope.launch {
+                    supabaseClient.deleteRecord("customers", target.uid)
+                    refreshUdhaariCustomers()
                 }
+                toastMsg = "Customer '${target.name}' deleted."
+                deletingCustomer = null
             }
-        }
+        )
     }
 }
 
 @Composable
 private fun MobileUdhaariCustomerCard(
     customer: UdhaariCustomerModel,
+    userRole: String = "STAFF",
     onAddBaki: () -> Unit,
     onAddJama: () -> Unit,
     onViewHistory: () -> Unit,
@@ -677,6 +648,19 @@ private fun MobileUdhaariCustomerCard(
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit Profile", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp))
                     }
+
+                    if (userRole.equals("ADMIN", ignoreCase = true)) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFEF2F2))
+                                .clickable { onDelete() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Customer", tint = ErrorRed, modifier = Modifier.size(15.dp))
+                        }
+                    }
                 }
             }
         }
@@ -687,12 +671,14 @@ private fun MobileUdhaariCustomerCard(
 private fun UdhaariHistoryDialog(
     customer: UdhaariCustomerModel,
     supabaseClient: com.example.crm_app_kmp.data.SupabaseAndroidClient,
+    userRole: String = "STAFF",
     onDismiss: () -> Unit,
     onRefresh: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val transactions = remember { mutableStateListOf<UdhaariTransactionModel>() }
     var isLoading by remember { mutableStateOf(true) }
+    var deletingTxn by remember { mutableStateOf<UdhaariTransactionModel?>(null) }
 
     fun fetchLogs() {
         scope.launch {
@@ -774,18 +760,14 @@ private fun UdhaariHistoryDialog(
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(UdhaariCurrencyFormatter.formatIndianCurrency(txn.amount), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (txn.type == "Baki") ErrorRed else Color(0xFF16A34A))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    IconButton(
-                                        onClick = {
-                                            scope.launch {
-                                                supabaseClient.deleteRecord("udhaari", txn.id)
-                                                fetchLogs()
-                                                onRefresh()
-                                            }
-                                        },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(16.dp))
+                                    if (userRole.equals("ADMIN", ignoreCase = true)) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        IconButton(
+                                            onClick = { deletingTxn = txn },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(16.dp))
+                                        }
                                     }
                                 }
                             }
@@ -802,6 +784,23 @@ private fun UdhaariHistoryDialog(
                     Text("Close", fontSize = 13.sp)
                 }
             }
+
+            deletingTxn?.let { targetTxn ->
+                ThreeStepDeleteDialog(
+                    itemName = "Udhaari Entry: ${targetTxn.type} ${UdhaariCurrencyFormatter.formatIndianCurrency(targetTxn.amount)}",
+                    itemDetails = "Customer: ${customer.name} | Date: ${targetTxn.date}",
+                    userRole = userRole,
+                    onDismiss = { deletingTxn = null },
+                    onConfirmDelete = {
+                        scope.launch {
+                            supabaseClient.deleteRecord("udhaari", targetTxn.id)
+                            deletingTxn = null
+                            fetchLogs()
+                            onRefresh()
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -815,9 +814,9 @@ private fun UdhaariCustomerFormDialog(
     var name by remember { mutableStateOf(editingCustomer?.name ?: "") }
     var mobile by remember { mutableStateOf(editingCustomer?.mobile ?: "") }
     var area by remember { mutableStateOf(editingCustomer?.area ?: "Main Bazar") }
-    var category by remember { mutableStateOf(editingCustomer?.category ?: "Retailer") }
+    var category by remember { mutableStateOf(editingCustomer?.category ?: "Regular") }
     var cibilStatus by remember { mutableStateOf(editingCustomer?.cibilStatus ?: "Good") }
-    var creditLimit by remember { mutableStateOf(editingCustomer?.creditLimit?.toString() ?: "50000") }
+    var creditLimit by remember { mutableStateOf(editingCustomer?.creditLimit?.toInt()?.toString() ?: "50000") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -829,8 +828,9 @@ private fun UdhaariCustomerFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -852,84 +852,78 @@ private fun UdhaariCustomerFormDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Customer Name",
                     value = name,
-                    onValueChange = { name = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Customer Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    onValueChange = { name = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. Adil or Sarah"
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = mobile,
-                        onValueChange = { mobile = it },
-                        placeholder = { Text("Mobile Number", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = area,
-                        onValueChange = { area = it },
-                        placeholder = { Text("Area Name", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                AppPhoneField(
+                    label = "Mobile Number",
+                    value = mobile,
+                    onValueChange = { mobile = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. 9876543210"
+                )
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Area",
+                    value = area,
+                    onValueChange = { area = it },
+                    placeholder = "e.g. Nawgaji Plot or Civil Lines"
+                )
+
+                AppDropdown(
+                    label = "Category",
+                    selectedValue = category,
+                    options = listOf("Regular", "VIP", "Wholesale"),
+                    onSelect = { category = it }
+                )
+
+                AppDropdown(
+                    label = "CIBIL Status",
+                    selectedValue = cibilStatus,
+                    options = listOf("Good", "Average", "Bad"),
+                    onSelect = { cibilStatus = it }
+                )
+
+                AppNumberField(
+                    label = "Credit Limit (₹)",
                     value = creditLimit,
                     onValueChange = { creditLimit = it },
-                    placeholder = { Text("Credit Limit (₹)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    placeholder = "5000.00"
                 )
-
-                Text("CIBIL Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    listOf("Good", "Average", "Bad").forEach { st ->
-                        RadioButton(
-                            selected = cibilStatus == st,
-                            onClick = { cibilStatus = st },
-                            colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                        )
-                        Text(st, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = if (editingCustomer != null) "Save Profile" else "Add Profile",
                         onClick = {
                             val limitNum = creditLimit.toDoubleOrNull() ?: 50000.0
                             if (name.isBlank()) {
                                 errorMsg = "Customer Name is required."
+                            } else if (mobile.isBlank()) {
+                                errorMsg = "Mobile Number is required."
+                            } else if (mobile.length != 10) {
+                                errorMsg = "Mobile number must be exactly 10 numeric digits."
                             } else {
                                 onSave(name.trim(), mobile.trim(), area.trim(), category, cibilStatus, limitNum)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingCustomer != null) "Save Profile" else "Add Profile", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }
@@ -954,6 +948,10 @@ private fun UdhaariTxnDialog(
     var notes by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
+    val customerOptions = customers.map { "${it.name} (${it.area})" }
+    val selectedCustomer = customers.find { it.uid == selectedUid }
+    val selectedCustomerText = selectedCustomer?.let { "${it.name} (${it.area})" } ?: "-- Select Customer --"
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
@@ -963,8 +961,9 @@ private fun UdhaariTxnDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -981,100 +980,71 @@ private fun UdhaariTxnDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                // CUSTOMER SELECTOR
-                Text("Select Customer *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                var expandedCustomerDropdown by remember { mutableStateOf(false) }
-                val selectedCustomerName = customers.find { it.uid == selectedUid }?.name ?: "Select Customer"
-
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { expandedCustomerDropdown = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(selectedCustomerName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                AppDropdown(
+                    label = "Select Customer",
+                    selectedValue = selectedCustomerText,
+                    options = customerOptions,
+                    onSelect = { optionText ->
+                        val matched = customers.find { "${it.name} (${it.area})" == optionText }
+                        if (matched != null) {
+                            selectedUid = matched.uid
+                            errorMsg = null
                         }
-                    }
-
-                    DropdownMenu(
-                        expanded = expandedCustomerDropdown,
-                        onDismissRequest = { expandedCustomerDropdown = false }
-                    ) {
-                        customers.forEach { cust ->
-                            DropdownMenuItem(
-                                text = { Text("${cust.name} (${cust.area})", fontSize = 13.sp) },
-                                onClick = {
-                                    selectedUid = cust.uid
-                                    expandedCustomerDropdown = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Text("Transaction Type", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = txnType == "Baki", onClick = { txnType = "Baki" }, colors = RadioButtonDefaults.colors(selectedColor = ErrorRed))
-                    Text("Baki (Debit/Debt)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    RadioButton(selected = txnType == "Jama", onClick = { txnType = "Jama" }, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF16A34A)))
-                    Text("Jama (Credit/Payment)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
-                }
-
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { amount = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Amount (₹) *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    },
+                    required = true
                 )
 
-                OutlinedTextField(
+                AppDropdown(
+                    label = "Transaction Type",
+                    selectedValue = if (txnType == "Baki") "Baki (Give Credit/Debit)" else "Jama (Receive Payment/Credit)",
+                    options = listOf("Baki (Give Credit/Debit)", "Jama (Receive Payment/Credit)"),
+                    onSelect = { sel ->
+                        txnType = if (sel.startsWith("Baki")) "Baki" else "Jama"
+                    },
+                    required = true
+                )
+
+                AppNumberField(
+                    label = "Amount (₹)",
+                    value = amount,
+                    onValueChange = { amount = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. 5000.00"
+                )
+
+                AppTextField(
+                    label = "Notes / Reference",
                     value = notes,
                     onValueChange = { notes = it },
-                    placeholder = { Text("Notes / Reference", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    placeholder = "e.g. Goods sale or Cash receipt"
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = "Save $txnType Entry",
                         onClick = {
                             val amtNum = amount.toDoubleOrNull()
                             if (selectedUid.isBlank()) {
                                 errorMsg = "Please select a customer."
                             } else if (amtNum == null || amtNum <= 0) {
-                                errorMsg = "Please enter a valid amount."
+                                errorMsg = "Please enter a valid positive transaction amount."
                             } else {
                                 onSave(selectedUid, txnType, amtNum, notes.trim())
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (txnType == "Baki") ErrorRed else Color(0xFF16A34A)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Save $txnType", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }

@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { WebSupplierLedgerEntry, INITIAL_WEB_SUPPLIERS } from '../../types/supplierledger';
+import { WebSupplierLedgerEntry } from '../../types/supplierledger';
+
+export interface SupplierOption {
+  id: string;
+  name: string;
+}
 
 interface SupplierLedgerEntryModalProps {
   isOpen: boolean;
   editingEntry: WebSupplierLedgerEntry | null;
+  suppliers: SupplierOption[];
+  isLoadingSuppliers?: boolean;
+  suppliersError?: string | null;
   onClose: () => void;
   onSave: (
     supplierId: string,
@@ -20,11 +28,13 @@ interface SupplierLedgerEntryModalProps {
 export const SupplierLedgerEntryModal: React.FC<SupplierLedgerEntryModalProps> = ({
   isOpen,
   editingEntry,
+  suppliers,
+  isLoadingSuppliers = false,
+  suppliersError = null,
   onClose,
   onSave
 }) => {
-  const defaultSupId = INITIAL_WEB_SUPPLIERS.length > 0 ? INITIAL_WEB_SUPPLIERS[0].id : '';
-  const [supplierId, setSupplierId] = useState(defaultSupId);
+  const [supplierId, setSupplierId] = useState('');
   const [date, setDate] = useState('29 Aug 2026');
   const [transactionType, setTransactionType] = useState('Purchase');
   const [amount, setAmount] = useState('');
@@ -43,7 +53,7 @@ export const SupplierLedgerEntryModal: React.FC<SupplierLedgerEntryModalProps> =
       setPaymentMode(editingEntry.paymentMode || 'Cash');
       setDescription(editingEntry.description || '');
     } else {
-      setSupplierId(defaultSupId);
+      setSupplierId(suppliers.length > 0 ? suppliers[0].id : '');
       setDate('29 Aug 2026');
       setTransactionType('Purchase');
       setAmount('');
@@ -52,7 +62,7 @@ export const SupplierLedgerEntryModal: React.FC<SupplierLedgerEntryModalProps> =
       setDescription('');
     }
     setErrorMsg('');
-  }, [editingEntry, isOpen]);
+  }, [editingEntry, isOpen, suppliers]);
 
   if (!isOpen) return null;
 
@@ -72,7 +82,7 @@ export const SupplierLedgerEntryModal: React.FC<SupplierLedgerEntryModalProps> =
       return;
     }
 
-    const matchedSup = INITIAL_WEB_SUPPLIERS.find((s) => s.id === supplierId);
+    const matchedSup = suppliers.find((s) => s.id === supplierId);
     const supName = matchedSup ? matchedSup.name : 'Supplier';
 
     onSave(
@@ -112,12 +122,27 @@ export const SupplierLedgerEntryModal: React.FC<SupplierLedgerEntryModalProps> =
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value)}
               required
+              disabled={isLoadingSuppliers || suppliers.length === 0}
             >
-              {INITIAL_WEB_SUPPLIERS.map((sup) => (
-                <option key={sup.id} value={sup.id}>
-                  {sup.name} ({sup.id})
+              {isLoadingSuppliers ? (
+                <option value="" disabled>
+                  Loading suppliers...
                 </option>
-              ))}
+              ) : suppliersError ? (
+                <option value="" disabled>
+                  Unable to load suppliers
+                </option>
+              ) : suppliers.length === 0 ? (
+                <option value="" disabled>
+                  No suppliers available
+                </option>
+              ) : (
+                suppliers.map((sup) => (
+                  <option key={sup.id} value={sup.id}>
+                    {sup.name} ({sup.id})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -205,7 +230,12 @@ export const SupplierLedgerEntryModal: React.FC<SupplierLedgerEntryModalProps> =
             <button type="button" className="btn-secondary-udhaari" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary-udhaari" style={{ backgroundColor: '#16a34a' }}>
+            <button
+              type="submit"
+              className="btn-primary-udhaari"
+              style={{ backgroundColor: '#16a34a' }}
+              disabled={isLoadingSuppliers || suppliers.length === 0}
+            >
               {editingEntry ? 'Save Changes' : 'Save Entry'}
             </button>
           </div>

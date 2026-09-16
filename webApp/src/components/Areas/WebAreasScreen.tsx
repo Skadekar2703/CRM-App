@@ -5,7 +5,12 @@ import { DeleteAreaDialog } from './DeleteAreaDialog';
 import { supabase } from '../../lib/supabase';
 import './Areas.css';
 
-export const WebAreasScreen: React.FC = () => {
+interface WebAreasScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebAreasScreen: React.FC<WebAreasScreenProps> = ({ userRole }) => {
+  const [role, setRole] = useState<string>(userRole ? String(userRole).toUpperCase() : 'STAFF');
   const [areas, setAreas] = useState<Area[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState<number>(10);
@@ -52,8 +57,27 @@ export const WebAreasScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('users').select('role').eq('id', user.id).single();
+          if (data?.role) {
+            setRole(String(data.role).toUpperCase());
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (userRole) {
+      setRole(String(userRole).toUpperCase());
+    } else {
+      fetchUserRole();
+    }
     loadAreasFromSupabase();
-  }, []);
+  }, [userRole]);
 
   if (isLoading) {
     // loaded
@@ -315,11 +339,13 @@ export const WebAreasScreen: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
-                        <button className="action-btn-icon delete" onClick={() => handleDeleteClick(area)} title="Delete Area">
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {role === 'ADMIN' && (
+                          <button className="action-btn-icon delete" onClick={() => handleDeleteClick(area)} title="Delete Area">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -346,11 +372,13 @@ export const WebAreasScreen: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                   </button>
-                  <button className="action-btn-icon delete" onClick={() => handleDeleteClick(area)}>
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {role === 'ADMIN' && (
+                    <button className="action-btn-icon delete" onClick={() => handleDeleteClick(area)}>
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -410,6 +438,7 @@ export const WebAreasScreen: React.FC = () => {
         <DeleteAreaDialog
           isOpen={deleteTargetArea !== null}
           area={deleteTargetArea}
+          userRole={role}
           onClose={() => setDeleteTargetArea(null)}
           onConfirm={handleConfirmDelete}
         />

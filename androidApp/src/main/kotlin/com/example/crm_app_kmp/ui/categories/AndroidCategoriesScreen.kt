@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +64,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.example.crm_app_kmp.categories.CategoryModel
 import com.example.crm_app_kmp.ui.components.CrmRootScaffold
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -87,6 +91,7 @@ fun AndroidCategoriesContent() {
     val categories = remember { mutableStateListOf<CategoryModel>() }
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterChip by remember { mutableStateOf("All") }
+    var userRole by remember { mutableStateOf("STAFF") }
 
     var showFormDialog by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryModel?>(null) }
@@ -118,6 +123,7 @@ fun AndroidCategoriesContent() {
     }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
+        userRole = supabaseClient.getUserRole()
         refreshCategories()
     }
 
@@ -240,6 +246,7 @@ fun AndroidCategoriesContent() {
                     filteredCategories.forEach { cat ->
                         MobileCategoryCard(
                             category = cat,
+                            userRole = userRole,
                             onEdit = {
                                 editingCategory = cat
                                 showFormDialog = true
@@ -273,106 +280,86 @@ fun AndroidCategoriesContent() {
             editingCategory = editingCategory,
             existingCategories = categories,
             onDismiss = { showFormDialog = false },
-            onSave = { name, status ->
+            onSave = { name, status, subText ->
                 scope.launch {
                     val trimmed = name.trim()
                     val duplicate = categories.any { c -> c.name.equals(trimmed, ignoreCase = true) && c.id != editingCategory?.id }
                     if (duplicate) {
-                        errorToastMsg = "Category '$trimmed' already exists."
+                        android.widget.Toast.makeText(context, "Category '$trimmed' already exists.", android.widget.Toast.LENGTH_SHORT).show()
                         return@launch
                     }
 
                     val payload = JSONObject().apply {
                         put("name", trimmed)
-                        put("status", status)
+                        put("description", subText.trim())
                     }
+
                     if (editingCategory != null) {
-                        supabaseClient.updateRecord("categories", editingCategory!!.id, payload)
-                        toastMsg = "Category '$trimmed' updated."
+                        val res = supabaseClient.updateRecord("categories", editingCategory!!.id, payload)
+                        res.onSuccess {
+                            android.widget.Toast.makeText(context, "Category '$trimmed' updated successfully.", android.widget.Toast.LENGTH_SHORT).show()
+                            showFormDialog = false
+                            refreshCategories()
+                        }.onFailure { err ->
+                            android.widget.Toast.makeText(context, "Unable to update category: ${err.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     } else {
-                        supabaseClient.insertRecord("categories", payload)
-                        toastMsg = "New category '$trimmed' created."
+                        val res = supabaseClient.insertRecord("categories", payload)
+                        res.onSuccess {
+                            android.widget.Toast.makeText(context, "Category created successfully", android.widget.Toast.LENGTH_SHORT).show()
+                            showFormDialog = false
+                            refreshCategories()
+                        }.onFailure { err ->
+                            android.widget.Toast.makeText(context, "Unable to create category: ${err.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
-                    refreshCategories()
                 }
-                showFormDialog = false
             }
         )
     }
 
     deletingCategory?.let { target ->
-        Dialog(onDismissRequest = { deletingCategory = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Category?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete '${target.name}'?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = { deletingCategory = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    // Delete protection check against active customers
-                                    val custRes = supabaseClient.fetchTable("customers")
-                                    var isAssigned = false
-                                    custRes.onSuccess { arr ->
-                                        for (i in 0 until arr.length()) {
-                                            val cObj = arr.getJSONObject(i)
-                                            val cCat = cObj.optString("category", "")
-                                            val cCatId = cObj.optString("category_id", "")
-                                            if (cCat.equals(target.name, ignoreCase = true) || cCatId == target.id) {
-                                                isAssigned = true
-                                                break
-                                            }
-                                        }
-                                    }
-
-                                    if (isAssigned) {
-                                        errorToastMsg = "This category is assigned to customers and cannot be deleted."
-                                        deletingCategory = null
-                                        return@launch
-                                    }
-
-                                    supabaseClient.deleteRecord("categories", target.id)
-                                    toastMsg = "Category '${target.name}' deleted."
-                                    refreshCategories()
-                                    deletingCategory = null
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        ThreeStepDeleteDialog(
+            itemName = "Category: ${target.name}",
+            itemDetails = "Status: ${target.status}",
+            userRole = userRole,
+            onDismiss = { deletingCategory = null },
+            onConfirmDelete = {
+                scope.launch {
+                    val custRes = supabaseClient.fetchTable("customers")
+                    var isAssigned = false
+                    custRes.onSuccess { arr ->
+                        for (i in 0 until arr.length()) {
+                            val cObj = arr.getJSONObject(i)
+                            val cCat = cObj.optString("category", "")
+                            val cCatId = cObj.optString("category_id", "")
+                            if (cCat.equals(target.name, ignoreCase = true) || cCatId == target.id) {
+                                isAssigned = true
+                                break
+                            }
                         }
                     }
+
+                    if (isAssigned) {
+                        errorToastMsg = "This category is assigned to customers and cannot be deleted."
+                        deletingCategory = null
+                        return@launch
+                    }
+
+                    supabaseClient.deleteRecord("categories", target.id)
+                    toastMsg = "Category '${target.name}' deleted."
+                    refreshCategories()
+                    deletingCategory = null
                 }
             }
-        }
+        )
     }
 }
 
 @Composable
 private fun MobileCategoryCard(
     category: CategoryModel,
+    userRole: String = "STAFF",
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -476,17 +463,19 @@ private fun MobileCategoryCard(
                         Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextPrimary, modifier = Modifier.size(15.dp))
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    if (userRole.equals("ADMIN", ignoreCase = true)) {
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFEF2F2))
-                            .clickable { onDelete() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(15.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFEF2F2))
+                                .clickable { onDelete() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(15.dp))
+                        }
                     }
                 }
             }
@@ -499,10 +488,11 @@ private fun CategoryFormDialog(
     editingCategory: CategoryModel?,
     existingCategories: List<CategoryModel>,
     onDismiss: () -> Unit,
-    onSave: (name: String, status: String) -> Unit
+    onSave: (name: String, status: String, subText: String) -> Unit
 ) {
     var name by remember { mutableStateOf(editingCategory?.name ?: "") }
     var status by remember { mutableStateOf(editingCategory?.status ?: "Active") }
+    var subText by remember { mutableStateOf(editingCategory?.subText ?: "") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -514,8 +504,9 @@ private fun CategoryFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -537,59 +528,53 @@ private fun CategoryFormDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Category Name",
                     value = name,
-                    onValueChange = { name = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Category Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    onValueChange = { name = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. Retailer, Wholesaler, VIP, Regular"
                 )
 
-                Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = status == "Active",
-                        onClick = { status = "Active" },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                    )
-                    Text("Active", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    RadioButton(
-                        selected = status == "Inactive",
-                        onClick = { status = "Inactive" },
-                        colors = RadioButtonDefaults.colors(selectedColor = ErrorRed)
-                    )
-                    Text("Inactive", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
+                AppDropdown(
+                    label = "Status",
+                    selectedValue = status,
+                    options = listOf("Active", "Inactive"),
+                    onSelect = { status = it }
+                )
+
+                AppTextField(
+                    label = "Description / Remarks (Optional)",
+                    value = subText,
+                    onValueChange = { subText = it },
+                    singleLine = false,
+                    minLines = 2,
+                    placeholder = "e.g. Bulk buyers or local accounts"
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = if (editingCategory != null) "Save Changes" else "Add Category",
                         onClick = {
                             if (name.isBlank()) {
                                 errorMsg = "Category Name is required."
                             } else {
-                                onSave(name.trim(), status)
+                                onSave(name.trim(), status, subText.trim())
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingCategory != null) "Save Changes" else "Add Category", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }

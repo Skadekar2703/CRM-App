@@ -21,9 +21,6 @@ import { WebCashBookScreen } from '../CashBook/WebCashBookScreen';
 import { WebProfitLossScreen } from '../ProfitLoss/WebProfitLossScreen';
 import { WebAgingReportScreen } from '../AgingReport/WebAgingReportScreen';
 import { WebUserManagementScreen } from '../Users/WebUserManagementScreen';
-import { WebSettingsScreen } from '../Settings/WebSettingsScreen';
-import { WebAiFloatingButton } from '../AI/WebAiFloatingButton';
-import { WebAiChatModal } from '../AI/WebAiChatModal';
 import './WebDashboard.css';
 
 interface WebDashboardProps {
@@ -38,23 +35,26 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
   const getInitialSection = () => {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'users' || hash === 'user-management' || hash === 'usermanagement') return 'Users';
-    if (hash === 'settings') return 'Settings';
     if (hash === 'reminders') return 'Reminders';
     if (hash === 'notepad' || hash === 'notes') return 'Notepad';
     if (hash === 'areas') return 'Areas';
     if (hash === 'categories' || hash === 'category' || hash === 'customer-categories') return 'Categories';
+    if (hash === 'sales' || hash === 'sale') return 'Sales';
+    if (hash === 'items' || hash === 'item' || hash === 'inventory') return 'Items';
+    if (hash === 'transports' || hash === 'transport') return 'Transports';
     if (hash === 'expenses') return 'Expenses';
     if (hash === 'cash book' || hash === 'cash-book' || hash === 'cashbook') return 'Cash Book';
     if (hash === 'cheques') return 'Cheques';
     if (hash === 'profit & loss' || hash === 'profit-and-loss' || hash === 'pnl' || hash === 'profitloss') return 'Profit & Loss';
     if (hash === 'udhaari') return 'Udhaari';
+    if (hash === 'suppliers' || hash === 'supplier') return 'Suppliers';
+    if (hash === 'supplier ledger' || hash === 'supplier-ledger' || hash === 'supplierledger') return 'Supplier Ledger';
     if (hash === 'customers' || hash === 'customer' || hash === 'customer-management') return 'Customers';
     if (hash === 'dashboard') return 'Dashboard';
     return 'Dashboard';
   };
 
   const [activeSection, setActiveSectionState] = useState(getInitialSection);
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const userDisplayName = username || userEmail.split('@')[0];
 
   useEffect(() => {
@@ -182,23 +182,23 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
         ) : activeSection === 'Sales' ? (
           <WebSalesScreen />
         ) : activeSection === 'Areas' ? (
-          <WebAreasScreen />
+          <WebAreasScreen userRole={userRole} />
         ) : activeSection === 'Categories' ? (
-          <WebCategoriesScreen />
+          <WebCategoriesScreen userRole={userRole} />
         ) : activeSection === 'Transports' ? (
           <WebTransportsScreen />
         ) : activeSection === 'Items' ? (
           <WebItemsScreen />
         ) : activeSection === 'Udhaari' ? (
-          <WebUdhaariScreen />
+          <WebUdhaariScreen userRole={userRole} />
         ) : activeSection === 'Cheques' ? (
-          <WebChequesScreen />
+          <WebChequesScreen userRole={userRole} />
         ) : activeSection === 'Customers' ? (
           <WebCustomersScreen />
         ) : activeSection === 'Suppliers' ? (
-          <WebSuppliersScreen />
+          <WebSuppliersScreen userRole={userRole} />
         ) : activeSection === 'Employees' ? (
-          <WebEmployeesScreen />
+          <WebEmployeesScreen userRole={userRole} />
         ) : activeSection === 'Daag' ? (
           <WebDaagScreen />
         ) : activeSection === 'Notepad' || activeSection === 'Notes' ? (
@@ -206,7 +206,7 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
         ) : activeSection === 'Reminders' ? (
           <WebRemindersScreen />
         ) : activeSection === 'Expenses' ? (
-          <WebExpensesScreen />
+          <WebExpensesScreen userRole={userRole} />
         ) : activeSection === 'Supplier Ledger' || activeSection === 'SupplierLedger' ? (
           <WebSupplierLedgerScreen />
         ) : activeSection === 'Cash Book' || activeSection === 'CashBook' ? (
@@ -217,8 +217,6 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
           <WebAgingReportScreen />
         ) : activeSection === 'Users' || activeSection === 'UserManagement' ? (
           <WebUserManagementScreen />
-        ) : activeSection === 'Settings' ? (
-          <WebSettingsScreen />
         ) : (
           <div className="crm-content">
             <div className="card-box" style={{ padding: '40px', textAlign: 'center' }}>
@@ -231,10 +229,6 @@ export const WebDashboard: React.FC<WebDashboardProps> = ({ userEmail, username,
             </div>
           </div>
         )}
-
-        {/* GLOBAL FLOATING AI BUTTON & CHAT DRAWER */}
-        <WebAiFloatingButton onClick={() => setIsAiModalOpen(true)} />
-        <WebAiChatModal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} />
       </div>
     </div>
   );

@@ -19,6 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -60,6 +64,8 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.example.crm_app_kmp.areas.AreaModel
 import com.example.crm_app_kmp.areas.AreaRepository
+import com.example.crm_app_kmp.ui.components.CrmRootScaffold
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -80,6 +86,7 @@ fun AndroidAreasScreen() {
     var editingArea by remember { mutableStateOf<AreaModel?>(null) }
     var deletingArea by remember { mutableStateOf<AreaModel?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    var userRole by remember { mutableStateOf("STAFF") }
 
     fun refreshAreas() {
         scope.launch {
@@ -103,6 +110,7 @@ fun AndroidAreasScreen() {
     }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
+        userRole = supabaseClient.getUserRole()
         refreshAreas()
     }
 
@@ -182,12 +190,13 @@ fun AndroidAreasScreen() {
             // AREA CARDS LIST (REF 1)
             LazyLazyColumnList(
                 areas = filteredAreas,
-                onEdit = {
-                    editingArea = it
+                userRole = userRole,
+                onEdit = { area ->
+                    editingArea = area
                     showFormDialog = true
                 },
-                onDelete = {
-                    deletingArea = it
+                onDelete = { area ->
+                    deletingArea = area
                 }
             )
         }
@@ -242,58 +251,27 @@ fun AndroidAreasScreen() {
 
     // DELETE CONFIRMATION DIALOG
     deletingArea?.let { target ->
-        Dialog(onDismissRequest = { deletingArea = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Area?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-                    Text("Are you sure you want to delete '${target.name}'?", fontSize = 14.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { deletingArea = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    supabaseClient.deleteRecord("areas", target.id)
-                                    refreshAreas()
-                                }
-                                toastMsg = "Area '${target.name}' deleted."
-                                deletingArea = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
+        ThreeStepDeleteDialog(
+            itemName = "Area: ${target.name}",
+            itemDetails = "ID: ${target.id}",
+            userRole = userRole,
+            onDismiss = { deletingArea = null },
+            onConfirmDelete = {
+                scope.launch {
+                    supabaseClient.deleteRecord("areas", target.id)
+                    refreshAreas()
                 }
+                toastMsg = "Area '${target.name}' deleted."
+                deletingArea = null
             }
-        }
+        )
     }
 }
 
 @Composable
 private fun ColumnScope.LazyLazyColumnList(
     areas: List<AreaModel>,
+    userRole: String = "STAFF",
     onEdit: (AreaModel) -> Unit,
     onDelete: (AreaModel) -> Unit
 ) {
@@ -360,8 +338,10 @@ private fun ColumnScope.LazyLazyColumnList(
                             IconButton(onClick = { onEdit(area) }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Edit", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            IconButton(onClick = { onDelete(area) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
+                            if (userRole.equals("ADMIN", ignoreCase = true)) {
+                                IconButton(onClick = { onDelete(area) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
+                                }
                             }
                         }
                     }
@@ -390,7 +370,8 @@ private fun AreaFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
@@ -418,69 +399,44 @@ private fun AreaFormDialog(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Area Name *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = {
-                            name = it
-                            if (errorMsg != null) errorMsg = null
-                        },
-                        placeholder = { Text("e.g. North Region Hub", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                AppTextField(
+                    label = "Area Name",
+                    value = name,
+                    onValueChange = { name = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. North Region Hub"
+                )
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = status == "Active",
-                            onClick = { status = "Active" },
-                            colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                        )
-                        Text("Active", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        RadioButton(
-                            selected = status == "Inactive",
-                            onClick = { status = "Inactive" },
-                            colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                        )
-                        Text("Inactive", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-                    }
-                }
+                AppDropdown(
+                    label = "Status",
+                    selectedValue = status,
+                    options = listOf("Active", "Inactive"),
+                    onSelect = { status = it }
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = if (editingArea != null) "Save Changes" else "Add Area",
                         onClick = {
                             if (name.isBlank()) {
                                 errorMsg = "Area Name is required."
                             } else {
                                 onSave(name.trim(), status)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingArea != null) "Save Changes" else "Add Area", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }

@@ -5,7 +5,11 @@ import { DeleteSupplierDialog } from './DeleteSupplierDialog';
 import { supabase } from '../../lib/supabase';
 import '../Udhaari/Udhaari.css';
 
-export const WebSuppliersScreen: React.FC = () => {
+interface WebSuppliersScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebSuppliersScreen: React.FC<WebSuppliersScreenProps> = ({ userRole = 'STAFF' }) => {
   const [suppliers, setSuppliers] = useState<WebSupplier[]>(INITIAL_WEB_SUPPLIERS);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -339,15 +343,17 @@ export const WebSuppliersScreen: React.FC = () => {
                           </svg>
                         </button>
 
-                        <button
-                          className="action-btn-icon delete"
-                          onClick={() => handleDeleteSupplierClick(supplier)}
-                          title="Delete Supplier"
-                        >
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {userRole === 'ADMIN' && (
+                          <button
+                            className="action-btn-icon delete"
+                            onClick={() => handleDeleteSupplierClick(supplier)}
+                            title="Delete Supplier"
+                          >
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -404,6 +410,7 @@ export const WebSuppliersScreen: React.FC = () => {
         <DeleteSupplierDialog
           isOpen={deletingSupplier !== null}
           supplier={deletingSupplier}
+          userRole={userRole}
           onClose={() => setDeletingSupplier(null)}
           onConfirm={handleConfirmDelete}
         />

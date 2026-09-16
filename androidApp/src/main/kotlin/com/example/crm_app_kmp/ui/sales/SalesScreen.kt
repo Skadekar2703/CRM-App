@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
@@ -251,9 +253,11 @@ private fun AndroidPosView() {
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = { Text("Search items...", fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
                     shape = RoundedCornerShape(12.dp)
                 )
 
@@ -268,18 +272,22 @@ private fun AndroidPosView() {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                     shape = RoundedCornerShape(12.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                    modifier = Modifier.height(48.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Text("+ Add Item", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add Item", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
-                IconButton(
+                Button(
                     onClick = { refreshCatalog() },
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(PrimaryBlue, RoundedCornerShape(12.dp))
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh Inventory", tint = Color.White)
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh Inventory", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -693,144 +701,138 @@ private fun AndroidPosView() {
     }
 
     if (showAddItemDialog) {
-        var dropdownExpanded by remember { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { if (!isSavingItem) showAddItemDialog = false },
-            title = { Text("+ Add New Item", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (addItemError != null) {
+        Dialog(onDismissRequest = { if (!isSavingItem) showAddItemDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "⚠️ ${addItemError!!}",
-                            color = ErrorRed,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "+ Add New Item",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
                         )
+                        IconButton(onClick = { if (!isSavingItem) showAddItemDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
                     }
 
-                    OutlinedTextField(
-                        value = newItemName,
-                        onValueChange = { newItemName = it },
-                        label = { Text("Product Name *") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = newItemPrice,
-                        onValueChange = { newItemPrice = it },
-                        label = { Text("Price (₹) *") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = newItemStock,
-                        onValueChange = { newItemStock = it },
-                        label = { Text("Stock Quantity *") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = newItemCategory,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Category") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.clickable { dropdownExpanded = !dropdownExpanded }
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth().clickable { dropdownExpanded = !dropdownExpanded }
-                        )
-
-                        DropdownMenu(
-                            expanded = dropdownExpanded,
-                            onDismissRequest = { dropdownExpanded = false }
+                    addItemError?.let { err ->
+                        androidx.compose.material3.Surface(
+                            color = Color(0xFFFEF2F2),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            categoriesList.forEach { cat ->
-                                DropdownMenuItem(
-                                    text = { Text(cat) },
-                                    onClick = {
-                                        newItemCategory = cat
-                                        dropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val name = newItemName.trim()
-                        val priceVal = newItemPrice.toDoubleOrNull()
-                        val stockVal = newItemStock.toIntOrNull()
-
-                        if (name.isBlank()) {
-                            addItemError = "Product name is required."
-                            return@Button
-                        }
-                        if (priceVal == null || priceVal < 0) {
-                            addItemError = "Please enter a valid price (>= 0)."
-                            return@Button
-                        }
-                        if (stockVal == null || stockVal < 0) {
-                            addItemError = "Please enter a valid stock quantity (>= 0)."
-                            return@Button
-                        }
-
-                        scope.launch {
-                            isSavingItem = true
-                            addItemError = null
-                            val res = supabaseClient.addItem(
-                                name = name,
-                                brand = "Generic",
-                                code = "",
-                                category = newItemCategory,
-                                unit = "Pcs",
-                                stockQuantity = stockVal,
-                                lowStockAlert = 5,
-                                salePrice = priceVal,
-                                status = "Active"
+                            Text(
+                                text = "⚠️ $err",
+                                color = ErrorRed,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(10.dp)
                             )
-                            isSavingItem = false
-                            res.onSuccess { newItem ->
-                                showAddItemDialog = false
-                                successMsg = "Item \"${newItem.name}\" added successfully!"
-                                refreshCatalog()
-                            }.onFailure { err ->
-                                addItemError = err.message ?: "Failed to add item"
+                        }
+                    }
+
+                    com.example.crm_app_kmp.ui.components.AppTextField(
+                        value = newItemName,
+                        onValueChange = { newItemName = it; addItemError = null },
+                        label = "Product Name",
+                        placeholder = "e.g. Basmati Rice 5kg",
+                        isRequired = true
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            com.example.crm_app_kmp.ui.components.AppNumberField(
+                                value = newItemPrice,
+                                onValueChange = { newItemPrice = it; addItemError = null },
+                                label = "Price (₹)",
+                                placeholder = "0.00",
+                                isRequired = true,
+                                allowDecimal = true
+                            )
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            com.example.crm_app_kmp.ui.components.AppNumberField(
+                                value = newItemStock,
+                                onValueChange = { newItemStock = it; addItemError = null },
+                                label = "Stock Quantity",
+                                placeholder = "0",
+                                isRequired = true
+                            )
+                        }
+                    }
+
+                    com.example.crm_app_kmp.ui.components.AppDropdown(
+                        value = newItemCategory,
+                        onValueChange = { newItemCategory = it },
+                        label = "Category",
+                        options = categoriesList.distinct().ifEmpty { listOf("General") }
+                    )
+
+                    com.example.crm_app_kmp.ui.components.AppFormButton(
+                        text = if (isSavingItem) "Saving..." else "Save Item",
+                        enabled = !isSavingItem,
+                        onClick = {
+                            val name = newItemName.trim()
+                            val priceVal = newItemPrice.toDoubleOrNull()
+                            val stockVal = newItemStock.toIntOrNull()
+
+                            if (name.isBlank()) {
+                                addItemError = "Product Name is required."
+                                return@AppFormButton
+                            }
+                            if (priceVal == null || priceVal < 0) {
+                                addItemError = "Price must be a valid number >= 0."
+                                return@AppFormButton
+                            }
+                            if (stockVal == null || stockVal < 0) {
+                                addItemError = "Stock Quantity must be a valid integer >= 0."
+                                return@AppFormButton
+                            }
+
+                            scope.launch {
+                                isSavingItem = true
+                                addItemError = null
+                                val res = supabaseClient.addItem(
+                                    name = name,
+                                    brand = "Generic",
+                                    code = "",
+                                    category = newItemCategory,
+                                    unit = "Pcs",
+                                    stockQuantity = stockVal,
+                                    lowStockAlert = 5,
+                                    salePrice = priceVal,
+                                    status = "Active"
+                                )
+                                isSavingItem = false
+                                res.onSuccess { newItem ->
+                                    showAddItemDialog = false
+                                    successMsg = "Item \"${newItem.name}\" added successfully!"
+                                    refreshCatalog()
+                                }.onFailure { err ->
+                                    addItemError = err.message ?: "Failed to create item."
+                                }
                             }
                         }
-                    },
-                    enabled = !isSavingItem,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
-                ) {
-                    if (isSavingItem) {
-                        androidx.compose.material3.CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
-                    } else {
-                        Text("Save Item")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showAddItemDialog = false },
-                    enabled = !isSavingItem
-                ) {
-                    Text("Cancel")
+                    )
                 }
             }
-        )
+        }
     }
+
 
     completedReceiptTx?.let { tx ->
         Dialog(onDismissRequest = { completedReceiptTx = null }) {

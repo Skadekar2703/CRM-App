@@ -6,7 +6,12 @@ import { CategoryImportModal } from './CategoryImportModal';
 import { supabase } from '../../lib/supabase';
 import './Categories.css';
 
-export const WebCategoriesScreen: React.FC = () => {
+interface WebCategoriesScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebCategoriesScreen: React.FC<WebCategoriesScreenProps> = ({ userRole }) => {
+  const [role, setRole] = useState<string>(userRole ? String(userRole).toUpperCase() : 'STAFF');
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -59,8 +64,27 @@ export const WebCategoriesScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('users').select('role').eq('id', user.id).single();
+          if (data?.role) {
+            setRole(String(data.role).toUpperCase());
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (userRole) {
+      setRole(String(userRole).toUpperCase());
+    } else {
+      fetchUserRole();
+    }
     loadCategoriesFromSupabase();
-  }, []);
+  }, [userRole]);
 
   // FILTERED DATA
   const filteredCategories = useMemo(() => {
@@ -431,13 +455,15 @@ export const WebCategoriesScreen: React.FC = () => {
                           >
                             Edit
                           </button>
-                          <button
-                            className="btn-secondary-web"
-                            style={{ padding: '6px 12px', fontSize: '12px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
-                            onClick={() => handleDeleteClick(cat)}
-                          >
-                            Delete
-                          </button>
+                          {role === 'ADMIN' && (
+                            <button
+                              className="btn-secondary-web"
+                              style={{ padding: '6px 12px', fontSize: '12px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                              onClick={() => handleDeleteClick(cat)}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -470,9 +496,11 @@ export const WebCategoriesScreen: React.FC = () => {
                     <button className="btn-secondary-web" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleEditClick(cat)}>
                       Edit
                     </button>
-                    <button className="btn-secondary-web" style={{ padding: '6px 12px', fontSize: '12px', color: '#ef4444' }} onClick={() => handleDeleteClick(cat)}>
-                      Delete
-                    </button>
+                    {role === 'ADMIN' && (
+                      <button className="btn-secondary-web" style={{ padding: '6px 12px', fontSize: '12px', color: '#ef4444' }} onClick={() => handleDeleteClick(cat)}>
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -527,6 +555,7 @@ export const WebCategoriesScreen: React.FC = () => {
         <DeleteCategoryDialog
           isOpen={deletingCategory !== null}
           category={deletingCategory}
+          userRole={role}
           onClose={() => setDeletingCategory(null)}
           onConfirm={handleConfirmDelete}
         />

@@ -593,8 +593,7 @@ private fun ReminderFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
@@ -614,85 +613,126 @@ private fun ReminderFormDialog(
                 }
 
                 errorMsg?.let { err ->
-                    Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
                 }
 
-                OutlinedTextField(
-                    value = customerName,
-                    onValueChange = { customerName = it },
-                    placeholder = { Text("Customer Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = mobile,
-                    onValueChange = { mobile = it },
-                    placeholder = { Text("Mobile Number *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = scheduledAt,
-                    onValueChange = { scheduledAt = it },
-                    placeholder = { Text("Scheduled Date & Time *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = type,
-                    onValueChange = { type = it },
-                    placeholder = { Text("Type (Call, WhatsApp, Visit...)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    placeholder = { Text("Notes & Follow-up Details", fontSize = 13.sp) },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            if (customerName.isBlank()) {
-                                errorMsg = "Customer Name is required."
-                            } else if (mobile.isBlank()) {
-                                errorMsg = "Mobile is required."
-                            } else {
-                                onSave(customerName.trim(), mobile.trim(), scheduledAt.trim(), type, priority, status, notes.trim(), customerId)
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = customerName,
+                                    onValueChange = { customerName = it; errorMsg = null },
+                                    label = "Customer Name",
+                                    placeholder = "e.g. Imran Sheikh",
+                                    isRequired = true
+                                )
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingReminder != null) "Save Changes" else "Save Reminder", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppPhoneField(
+                                    value = mobile,
+                                    onValueChange = { mobile = it; errorMsg = null },
+                                    label = "Mobile Number",
+                                    placeholder = "9821345678",
+                                    isRequired = true
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDatePicker(
+                                    value = scheduledAt,
+                                    onValueChange = { scheduledAt = it; errorMsg = null },
+                                    label = "Scheduled Date & Time",
+                                    isRequired = true
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = customerId,
+                                    onValueChange = { customerId = it },
+                                    label = "Customer ID (Optional)",
+                                    placeholder = "e.g. 100023"
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = type,
+                                    onValueChange = { type = it },
+                                    label = "Reminder Type",
+                                    options = listOf("Call", "WhatsApp", "Visit", "Payment Follow-up", "Meeting", "Other")
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = priority,
+                                    onValueChange = { priority = it },
+                                    label = "Priority",
+                                    options = listOf("Low", "Normal", "High", "Urgent")
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = status,
+                                    onValueChange = { status = it },
+                                    label = "Status",
+                                    options = listOf("Pending", "Done", "Snoozed", "Cancelled")
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            label = "Notes / Follow-up Details",
+                            placeholder = "e.g. Confirm cheque payment or discuss discount rates..."
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingReminder != null) "Save Changes" else "Save Reminder",
+                            onClick = {
+                                if (customerName.isBlank()) {
+                                    errorMsg = "Customer Name is required"
+                                    return@AppFormButton
+                                }
+                                if (mobile.isBlank()) {
+                                    errorMsg = "Mobile number is required"
+                                    return@AppFormButton
+                                }
+                                if (scheduledAt.isBlank()) {
+                                    errorMsg = "Date and Time are required"
+                                    return@AppFormButton
+                                }
+                                onSave(customerName.trim(), mobile.trim(), scheduledAt.trim(), type, priority, status, notes.trim(), customerId.trim())
+                            }
+                        )
                     }
                 }
             }
         }
     }
 }
+

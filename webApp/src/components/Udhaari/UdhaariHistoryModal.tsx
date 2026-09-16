@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { UdhaariCustomer, UdhaariTransaction } from '../../types/udhaari';
 import { supabase } from '../../lib/supabase';
-import { formatIndianCurrency } from './WebUdhaariScreen';
+import { ThreeStepDeleteModal } from '../common/ThreeStepDeleteModal';
+
+const formatIndianCurrency = (val: number) => '₹' + Number(val || 0).toLocaleString('en-IN');
 
 interface UdhaariHistoryModalProps {
   isOpen: boolean;
   customer: UdhaariCustomer | null;
+  userRole?: 'ADMIN' | 'STAFF' | string;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -13,6 +16,7 @@ interface UdhaariHistoryModalProps {
 export const UdhaariHistoryModal: React.FC<UdhaariHistoryModalProps> = ({
   isOpen,
   customer,
+  userRole = 'ADMIN',
   onClose,
   onRefresh,
 }) => {
@@ -23,6 +27,9 @@ export const UdhaariHistoryModal: React.FC<UdhaariHistoryModalProps> = ({
   const [editType, setEditType] = useState<'Baki' | 'Jama'>('Baki');
   const [editNotes, setEditNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
+  const [deletingTxn, setDeletingTxn] = useState<UdhaariTransaction | null>(null);
+
+  const isStaff = String(userRole).toUpperCase() !== 'ADMIN';
 
   const fetchHistory = async () => {
     if (!customer) return;
@@ -237,11 +244,13 @@ export const UdhaariHistoryModal: React.FC<UdhaariHistoryModalProps> = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
-                        <button className="action-btn-icon delete" onClick={() => handleDeleteTxn(t.id)} title="Delete Entry">
-                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {!isStaff && (
+                          <button className="action-btn-icon delete" onClick={() => setDeletingTxn(t)} title="Delete Entry">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -256,6 +265,19 @@ export const UdhaariHistoryModal: React.FC<UdhaariHistoryModalProps> = ({
             Close
           </button>
         </div>
+        <ThreeStepDeleteModal
+          isOpen={deletingTxn !== null}
+          itemName={`Udhaari Entry: ${deletingTxn?.type} ${formatIndianCurrency(deletingTxn?.amount || 0)}`}
+          itemDetails={`Customer: ${customer.name} | Date: ${deletingTxn?.date}`}
+          userRole={userRole}
+          onClose={() => setDeletingTxn(null)}
+          onConfirmDelete={async () => {
+            if (deletingTxn) {
+              await handleDeleteTxn(deletingTxn.id);
+              setDeletingTxn(null);
+            }
+          }}
+        />
       </div>
     </div>
   );

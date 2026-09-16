@@ -35,8 +35,8 @@ struct IOSAreasContentView: View {
     @State private var showFormSheet = false
     @State private var editingArea: IOSArea? = nil
     @State private var deleteTargetArea: IOSArea? = nil
-    @State private var showDeleteAlert = false
     @State private var toastMsg: String? = nil
+    @State private var userRole: String = "STAFF"
 
     func fetchAreas() {
         SupabaseIOSClient.shared.fetchTable(table: "areas") { result in
@@ -125,13 +125,15 @@ struct IOSAreasContentView: View {
                         ForEach(filteredAreas) { area in
                             IOSAreaCard(
                                 area: area,
+                                userRole: userRole,
                                 onEdit: {
                                     editingArea = area
                                     showFormSheet = true
                                 },
                                 onDelete: {
-                                    deleteTargetArea = area
-                                    showDeleteAlert = true
+                                    if userRole == "ADMIN" {
+                                        deleteTargetArea = area
+                                    }
                                 }
                             )
                         }
@@ -204,19 +206,17 @@ struct IOSAreasContentView: View {
                 }
             )
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Area"),
-                message: Text("Are you sure you want to delete '\(deleteTargetArea?.name ?? "")'?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deleteTargetArea {
-                        SupabaseIOSClient.shared.deleteRecord(table: "areas", id: target.id) { _ in
-                            self.fetchAreas()
-                        }
-                        toastMsg = "Area deleted"
+        .sheet(item: $deleteTargetArea) { target in
+            IOSThreeStepDeleteSheet(
+                itemName: "Area: \(target.name)",
+                itemDetails: "ID: \(target.id)",
+                userRole: userRole,
+                onConfirmDelete: {
+                    SupabaseIOSClient.shared.deleteRecord(table: "areas", id: target.id) { _ in
+                        self.fetchAreas()
                     }
-                },
-                secondaryButton: .cancel()
+                    toastMsg = "Area deleted"
+                }
             )
         }
     }
@@ -244,6 +244,7 @@ struct IOSAreaCard: View {
     }
 
     let area: IOSArea
+    var userRole: String = "STAFF"
     var onEdit: () -> Void
     var onDelete: () -> Void
 
@@ -290,9 +291,11 @@ struct IOSAreaCard: View {
                         Image(systemName: "pencil")
                             .foregroundColor(.blue)
                     }
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
+                    if userRole.uppercased() == "ADMIN" {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
                     }
                 }
                 .padding(.leading, 8)

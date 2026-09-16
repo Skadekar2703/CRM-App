@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WebCustomer, CIBIL_OPTIONS } from '../../types/customers';
 import { supabase } from '../../lib/supabase';
-import { getSignedPhotoUrl } from '../../utils/photoUtils';
+import { getSignedPhotoUrl, compressImageForUpload } from '../../utils/photoUtils';
 import { FormField, Input, Select, Textarea } from '../common/form';
 
 // Validation helpers
@@ -221,14 +221,13 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
       setIsUploadingPhoto(true);
       setErrorMsg('');
 
-      const rawExt = file.name.split('.').pop() || 'jpg';
-      const fileExt = rawExt.toLowerCase() === 'jpeg' ? 'jpg' : rawExt.toLowerCase();
-      const fileName = `customer_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+      const compressedBlob = await compressImageForUpload(file, 800, 0.85);
+      const fileName = `customer_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
       const filePath = `${businessId}/photos/${fileName}`;
 
       const { error: uploadErr } = await supabase.storage
         .from('customer_photos')
-        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+        .upload(filePath, compressedBlob, { cacheControl: '3600', upsert: true, contentType: 'image/jpeg' });
 
       if (uploadErr) {
         setErrorMsg(`Photo upload failed: ${uploadErr.message}`);
@@ -356,25 +355,25 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
         <form onSubmit={handleSubmit} className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto', padding: '20px 24px' }}>
           
           {/* SECTION 1 — CUSTOMER DETAILS */}
-          <div style={{ marginBottom: '24px', backgroundColor: '#0F172A', padding: '18px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '24px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', padding: '18px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary, #2563eb)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
               SECTION 1 — CUSTOMER DETAILS
             </h3>
 
             {/* Photo picker */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '16px' }}>
               {previewSignedUrl ? (
-                <img src={previewSignedUrl} alt="Preview" style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #38BDF8' }} />
+                <img src={previewSignedUrl} alt="Preview" style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary, #2563eb)' }} />
               ) : (
-                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#334155', color: '#94A3B8', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--bg-card, #ffffff)', color: 'var(--text-muted, #64748b)', border: '1px solid var(--border-color, #e2e8f0)', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
                   {name ? name.substring(0, 2).toUpperCase() : '👤'}
                 </div>
               )}
               <div>
-                <label style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC', display: 'block', marginBottom: '6px' }}>Customer Photo</label>
+                <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary, #0f172a)', display: 'block', marginBottom: '6px' }}>Customer Photo</label>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input type="file" ref={fileInputRef} accept="image/*" style={{ display: 'none' }} onChange={handlePhotoFileChange} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
-                  <button type="button" className="btn-secondary-udhaari" disabled={isUploadingPhoto || (editingCustomer ? userRole !== 'ADMIN' : false)} onClick={() => fileInputRef.current?.click()} style={{ fontSize: '12px', padding: '6px 14px', backgroundColor: '#334155', color: '#F8FAFC', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                  <button type="button" className="btn-secondary-udhaari" disabled={isUploadingPhoto || (editingCustomer ? userRole !== 'ADMIN' : false)} onClick={() => fileInputRef.current?.click()} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer' }}>
                     {isUploadingPhoto ? 'Uploading...' : photoUrl ? 'Replace Photo' : 'Add Photo'}
                   </button>
                   {photoUrl && userRole === 'ADMIN' && (
@@ -388,44 +387,44 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <FormField label="UID (Auto-Generated 6-Digit)">
-                <Input type="text" value={customerId} readOnly disabled style={{ backgroundColor: '#1E293B', fontWeight: 800, color: '#38BDF8', border: '1px solid #334155' }} />
+                <Input type="text" value={customerId} readOnly disabled style={{ fontWeight: 800, color: 'var(--color-primary, #2563eb)' }} />
               </FormField>
 
               <FormField label="Full Name" required>
-                <Input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required />
               </FormField>
 
               <FormField label="Mobile Number (10 Digits)" required>
-                <Input type="text" placeholder="9876543210" value={mobile} onChange={(e) => setMobile(e.target.value.replace(/[^0-9]/g, ''))} maxLength={10} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="9876543210" value={mobile} onChange={(e) => setMobile(e.target.value.replace(/[^0-9]/g, ''))} maxLength={10} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required />
               </FormField>
 
               <FormField label="Alternate Mobile">
-                <Input type="text" placeholder="Optional 10 Digits" value={alternateMobile} onChange={(e) => setAlternateMobile(e.target.value.replace(/[^0-9]/g, ''))} maxLength={10} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="Optional 10 Digits" value={alternateMobile} onChange={(e) => setAlternateMobile(e.target.value.replace(/[^0-9]/g, ''))} maxLength={10} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="Email">
-                <Input type="email" placeholder="customer@email.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="email" placeholder="customer@email.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="ID / CNC Number">
-                <Input type="text" placeholder="National ID / CNC No" value={idCncNo} onChange={(e) => setIdCncNo(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="National ID / CNC No" value={idCncNo} onChange={(e) => setIdCncNo(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="CD Code" required>
-                <Input type="text" placeholder="e.g. cd08, ABC123, 12345" value={cdCode} onChange={(e) => setCdCode(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="e.g. cd08, ABC123, 12345" value={cdCode} onChange={(e) => setCdCode(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required />
               </FormField>
             </div>
           </div>
 
           {/* SECTION 2 — CREDIT & GRADE */}
-          <div style={{ marginBottom: '24px', backgroundColor: '#0F172A', padding: '18px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '24px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', padding: '18px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary, #2563eb)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
               SECTION 2 — CREDIT & GRADE
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <FormField label="CIBIL Status">
-                <Select value={cibilStatus} onChange={(e) => setCibilStatus(e.target.value as any)} options={CIBIL_OPTIONS.map(o => ({ value: o, label: o }))} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Select value={cibilStatus} onChange={(e) => setCibilStatus(e.target.value as any)} options={CIBIL_OPTIONS.map(o => ({ value: o, label: o }))} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="Category *" required>
@@ -443,31 +442,30 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                   ]}
                   disabled={editingCustomer ? userRole !== 'ADMIN' : false}
                   required
-                  style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }}
                 />
               </FormField>
 
               <FormField label="Credit Limit (₹)" required helperText="Max allowed Baki balance">
-                <Input type="number" placeholder="50000" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155', fontWeight: 800 }} />
+                <Input type="number" placeholder="50000" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} required style={{ fontWeight: 800 }} />
               </FormField>
 
               <FormField label="Opening Balance (₹)">
-                <Input type="number" placeholder="0" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="number" placeholder="0" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="Tax Number (GST/VAT)">
-                <Input type="text" placeholder="GSTIN / Tax No" value={taxNo} onChange={(e) => setTaxNo(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="GSTIN / Tax No" value={taxNo} onChange={(e) => setTaxNo(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="Udhaari Wapisi Din (Credit Return Days)">
-                <Input type="number" placeholder="30" value={udharWapisiDin} onChange={(e) => setUdharWapisiDin(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="number" placeholder="30" value={udharWapisiDin} onChange={(e) => setUdharWapisiDin(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
             </div>
           </div>
 
           {/* SECTION 3 — ADDRESS */}
-          <div style={{ marginBottom: '24px', backgroundColor: '#0F172A', padding: '18px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '24px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', padding: '18px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary, #2563eb)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
               SECTION 3 — ADDRESS
             </h3>
 
@@ -488,11 +486,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                     ]}
                     disabled={editingCustomer ? userRole !== 'ADMIN' : false}
                     required
-                    style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }}
                   />
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0' }}>
-                    <span style={{ color: '#94A3B8', fontSize: '13px' }}>No areas available.</span>
+                    <span style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '13px' }}>No areas available.</span>
                     {userRole === 'ADMIN' && (
                       <button
                         type="button"
@@ -510,50 +507,50 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
               </FormField>
 
               <FormField label="Full Address">
-                <Textarea rows={2} placeholder="Complete physical address..." value={address} onChange={(e) => setAddress(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Textarea rows={2} placeholder="Complete physical address..." value={address} onChange={(e) => setAddress(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
             </div>
           </div>
 
           {/* SECTION 4 — GUARANTOR */}
-          <div style={{ marginBottom: '24px', backgroundColor: '#0F172A', padding: '18px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '24px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', padding: '18px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary, #2563eb)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
               SECTION 4 — GUARANTOR DETAILS
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <FormField label="Guarantor Name">
-                <Input type="text" placeholder="Guarantor full name" value={guarantorName} onChange={(e) => setGuarantorName(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="Guarantor full name" value={guarantorName} onChange={(e) => setGuarantorName(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
 
               <FormField label="Guarantor Mobile Number">
-                <Input type="text" placeholder="9876543210" value={guarantorMobile} onChange={(e) => setGuarantorMobile(e.target.value.replace(/[^0-9]/g, ''))} maxLength={10} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+                <Input type="text" placeholder="9876543210" value={guarantorMobile} onChange={(e) => setGuarantorMobile(e.target.value.replace(/[^0-9]/g, ''))} maxLength={10} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
               </FormField>
             </div>
           </div>
 
           {/* SECTION 5 — REMARK */}
-          <div style={{ marginBottom: '24px', backgroundColor: '#0F172A', padding: '18px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '24px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', padding: '18px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary, #2563eb)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
               SECTION 5 — REMARK / DESCRIPTION
             </h3>
 
             <FormField label="Remark">
-              <Textarea rows={2} placeholder="Internal account remarks..." value={remark} onChange={(e) => setRemark(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} style={{ backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }} />
+              <Textarea rows={2} placeholder="Internal account remarks..." value={remark} onChange={(e) => setRemark(e.target.value)} disabled={editingCustomer ? userRole !== 'ADMIN' : false} />
             </FormField>
           </div>
 
           {/* SECTION 6 — STATUS & CONTROLS */}
-          <div style={{ marginBottom: '24px', backgroundColor: '#0F172A', padding: '18px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '24px', backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', padding: '18px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary, #2563eb)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '16px' }}>
               SECTION 6 — STATUS & CONTROLS
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1E293B', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-card, #ffffff)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)' }}>
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>Account Status</div>
-                  <div style={{ fontSize: '12px', color: '#94A3B8' }}>{status === 'Active' ? 'Active in CRM' : 'Inactive account'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>Account Status</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)' }}>{status === 'Active' ? 'Active in CRM' : 'Inactive account'}</div>
                 </div>
                 <button
                   type="button"
@@ -574,10 +571,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1E293B', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-card, #ffffff)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)' }}>
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>Credit Blocked</div>
-                  <div style={{ fontSize: '12px', color: '#94A3B8' }}>{creditBlocked ? 'New Baki Rejected' : 'New Baki Allowed'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>Credit Blocked</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)' }}>{creditBlocked ? 'New Baki Rejected' : 'New Baki Allowed'}</div>
                 </div>
                 <button
                   type="button"
@@ -590,8 +587,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                     fontSize: '12px',
                     border: 'none',
                     cursor: (editingCustomer && userRole !== 'ADMIN') ? 'not-allowed' : 'pointer',
-                    backgroundColor: creditBlocked ? '#EF4444' : '#334155',
-                    color: '#FFFFFF'
+                    backgroundColor: creditBlocked ? '#EF4444' : 'var(--bg-surface-secondary, #e2e8f0)',
+                    color: creditBlocked ? '#FFFFFF' : 'var(--text-primary, #0f172a)'
                   }}
                 >
                   {creditBlocked ? 'BLOCKED ON' : 'OFF'}
@@ -601,7 +598,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
           </div>
 
           <div className="modal-footer" style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <button type="button" className="btn-secondary-udhaari" onClick={onClose} disabled={isSubmitting} style={{ backgroundColor: '#334155', color: '#F8FAFC', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 }}>
+            <button type="button" className="btn-secondary-udhaari" onClick={onClose} disabled={isSubmitting} style={{ border: '1px solid var(--border-color, #cbd5e1)', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 }}>
               Cancel
             </button>
             {(userRole === 'ADMIN' || !editingCustomer) && (

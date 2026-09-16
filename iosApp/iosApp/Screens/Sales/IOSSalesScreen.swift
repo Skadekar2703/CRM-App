@@ -5,7 +5,6 @@ struct IOSSalesScreen: View {
     @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
     private var cardBg: Color { isDarkMode ? Color(red: 17/255, green: 24/255, blue: 39/255) : Color.white }
-    private var bgApp: Color { isDarkMode ? Color(red: 15/255, green: 23/255, blue: 42/255) : Color(red: 248/255, green: 250/255, blue: 252/255) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +28,11 @@ struct IOSSalesScreen: View {
     }
 }
 
+struct IOSCustomerOption: Identifiable {
+    let id: String
+    let name: String
+}
+
 struct IOSPosView: View {
     @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
@@ -42,20 +46,54 @@ struct IOSPosView: View {
     @State private var paymentMethod = "Cash"
     @State private var showCartSheet = false
     @State private var successMsg: String? = nil
+    @State private var errorMsg: String? = nil
+    @State private var products: [IOSProduct] = []
+    @State private var customers: [IOSCustomerOption] = []
+    @State private var selectedCustomerId: String = ""
+    @State private var categories: [String] = ["All"]
+    @State private var isLoading = true
 
-    private let categories = ["All", "Textiles", "Hardware", "Electronics", "General"]
+    func loadCatalogData() {
+        isLoading = true
+        SupabaseIOSClient.shared.fetchItems { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                if case .success(let items) = result {
+                    self.products = items.map { dict in
+                        IOSProduct(
+                            id: dict["id"] as? String ?? UUID().uuidString,
+                            name: dict["name"] as? String ?? "Product",
+                            sku: dict["sku"] as? String ?? dict["code"] as? String ?? "SKU",
+                            category: dict["category"] as? String ?? "General",
+                            price: (dict["price"] as? NSNumber)?.doubleValue ?? 0.0,
+                            stock: (dict["stock_quantity"] as? NSNumber)?.intValue ?? 0
+                        )
+                    }
+                    let cats = Set(self.products.map { $0.category })
+                    self.categories = ["All"] + Array(cats).sorted()
+                }
+            }
+        }
 
-    private let products = [
-        IOSProduct(id: "p1", name: "Cotton Suit Fabric 5m", sku: "TEX-001", category: "Textiles", price: 1850, stock: 45),
-        IOSProduct(id: "p2", name: "Denim Jeans Material Roll", sku: "TEX-002", category: "Textiles", price: 4200, stock: 12),
-        IOSProduct(id: "p3", name: "Silk Sarees Wholesale Pack", sku: "TEX-003", category: "Textiles", price: 12500, stock: 8)
-    ]
+        SupabaseIOSClient.shared.fetchTable(table: "customers") { result in
+            DispatchQueue.main.async {
+                if case .success(let custs) = result {
+                    self.customers = custs.map { c in
+                        IOSCustomerOption(id: "\(c["id"] ?? "")", name: c["name"] as? String ?? "Customer")
+                    }
+                    if let first = self.customers.first {
+                        self.selectedCustomerId = first.id
+                    }
+                }
+            }
+        }
+    }
 
     var filteredProducts: [IOSProduct] {
         products.filter { p in
             let q = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
             let matchesSearch = q.isEmpty || p.name.lowercased().contains(q) || p.sku.lowercased().contains(q)
-            let matchesCat = selectedCategory == "All" || p.category == selectedCategory
+            let matchesCat = selectedCategory == "All" || p.category.caseInsensitiveCompare(selectedCategory) == .orderedSame
             return matchesSearch && matchesCat
         }
     }
@@ -118,58 +156,85 @@ struct IOSPosView: View {
                         .padding(.horizontal, 16)
                 }
 
+                if let err = errorMsg {
+                    Text("⚠️ \(err)")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.red)
+                        .padding(10)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(8)
+                        .padding(.horizontal, 16)
+                }
+
                 // PRODUCT GRID
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(filteredProducts) { product in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(product.name)
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                    .lineLimit(2)
-
-                                Text(product.stock <= 0 ? "Stock Khatam" : "Stock: \(product.stock)")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(product.stock <= 0 ? .red : .green)
-
-                                Spacer()
-
-                                HStack {
-                                    Text("₹\(Int(product.price))")
+                    if isLoading {
+                        ProgressView("Loading Products...")
+                            .padding(40)
+                    } else if filteredProducts.isEmpty {
+                        VStack(spacing: 8) {
+                            Spacer().frame(height: 40)
+                            Text("No items found.")
+                                .foregroundColor(.gray)
+                                .font(.subheadline)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            ForEach(filteredProducts) { product in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(product.name)
                                         .font(.subheadline)
                                         .fontWeight(.bold)
+                                        .lineLimit(2)
+                                        .foregroundColor(textPrimary)
+
+                                    Text(product.stock <= 0 ? "Out of stock" : "Stock: \(product.stock)")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(product.stock <= 0 ? .red : .green)
 
                                     Spacer()
 
-                                    Button(action: {
-                                        if product.stock > 0 {
-                                            if let idx = cart.firstIndex(where: { $0.product.id == product.id }) {
-                                                cart[idx].quantity += 1
-                                            } else {
-                                                cart.append(IOSCartItem(product: product, quantity: 1))
-                                            }
-                                        }
-                                    }) {
-                                        Text("+ Add")
-                                            .font(.caption)
+                                    HStack {
+                                        Text("₹\(Int(product.price))")
+                                            .font(.subheadline)
                                             .fontWeight(.bold)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 6)
-                                            .background(product.stock <= 0 ? Color.gray.opacity(0.3) : Color.blue)
-                                            .foregroundColor(.white)
-                                            .cornerRadius(6)
+                                            .foregroundColor(textPrimary)
+
+                                        Spacer()
+
+                                        Button(action: {
+                                            if product.stock > 0 {
+                                                if let idx = cart.firstIndex(where: { $0.product.id == product.id }) {
+                                                    cart[idx].quantity += 1
+                                                } else {
+                                                    cart.append(IOSCartItem(product: product, quantity: 1))
+                                                }
+                                            }
+                                        }) {
+                                            Text("+ Add")
+                                                .font(.caption)
+                                                .fontWeight(.bold)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(product.stock <= 0 ? Color.gray.opacity(0.3) : Color.blue)
+                                                .foregroundColor(.white)
+                                                .cornerRadius(6)
+                                        }
+                                        .disabled(product.stock <= 0)
                                     }
-                                    .disabled(product.stock <= 0)
                                 }
+                                .padding(12)
+                                .background(cardBg)
+                                .cornerRadius(12)
+                                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
                             }
-                            .padding(12)
-                            .background(Color.white)
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
                         }
+                        .padding(16)
                     }
-                    .padding(16)
                 }
             }
 
@@ -178,7 +243,7 @@ struct IOSPosView: View {
                 Button(action: { showCartSheet = true }) {
                     HStack(spacing: 8) {
                         Image(systemName: "cart.fill")
-                        Text("\(totalCartCount) Items • ₹\(Int(subtotal))")
+                        Text("\(totalCartCount) Items • ₹\(Int(totalCartAmount))")
                             .fontWeight(.bold)
                     }
                     .padding(.horizontal, 18)
@@ -191,6 +256,9 @@ struct IOSPosView: View {
                 .padding(20)
             }
         }
+        .onAppear {
+            loadCatalogData()
+        }
         .sheet(isPresented: $showCartSheet) {
             VStack(spacing: 16) {
                 HStack {
@@ -201,6 +269,15 @@ struct IOSPosView: View {
                 .padding(.top, 16)
 
                 Divider()
+
+                if !customers.isEmpty {
+                    Picker("Select Customer", selection: $selectedCustomerId) {
+                        ForEach(customers) { c in
+                            Text(c.name).tag(c.id)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                }
 
                 ScrollView {
                     VStack(spacing: 12) {
@@ -243,13 +320,48 @@ struct IOSPosView: View {
                 HStack {
                     Text("Total Payable").fontWeight(.bold)
                     Spacer()
-                    Text("₹\(Int(subtotal))").font(.title3).fontWeight(.bold).foregroundColor(.blue)
+                    Text("₹\(Int(totalCartAmount))").font(.title3).fontWeight(.bold).foregroundColor(.blue)
                 }
 
                 Button(action: {
-                    cart.removeAll()
-                    showCartSheet = false
-                    successMsg = "Sale completed successfully!"
+                    let customerObj = customers.first(where: { $0.id == selectedCustomerId })
+                    let custName = customerObj?.name ?? "Walk-in Customer"
+
+                    let cartItemsPayload: [[String: Any]] = cart.map { item in
+                        let isUuid = UUID(uuidString: item.product.id) != nil
+                        return [
+                            "item_id": isUuid ? item.product.id : NSNull(),
+                            "item_name": item.product.name,
+                            "sku": item.product.sku,
+                            "quantity": item.quantity,
+                            "unit_price": item.product.price,
+                            "subtotal": item.product.price * Double(item.quantity)
+                        ]
+                    }
+
+                    SupabaseIOSClient.shared.completeSaleRPC(
+                        customerId: selectedCustomerId.isEmpty ? nil : selectedCustomerId,
+                        customerName: custName,
+                        subtotal: totalCartAmount,
+                        discount: 0,
+                        tax: 0,
+                        total: totalCartAmount,
+                        paymentMethod: paymentMethod,
+                        cartItems: cartItemsPayload
+                    ) { result in
+                        DispatchQueue.main.async {
+                            switch result {
+                            case .success(let resDict):
+                                let invNo = resDict["invoice_number"] as? String ?? "INV-\(Int.random(in: 1000...9999))"
+                                self.cart.removeAll()
+                                self.showCartSheet = false
+                                self.successMsg = "Sale completed! Invoice #\(invNo)"
+                                self.loadCatalogData()
+                            case .failure(let err):
+                                self.errorMsg = err.localizedDescription
+                            }
+                        }
+                    }
                 }) {
                     Text("Complete Sale")
                         .font(.headline)
@@ -267,6 +379,30 @@ struct IOSPosView: View {
 }
 
 struct IOSSalesHistoryView: View {
+    @State private var salesHistory: [IOSInvoiceRowModel] = []
+    @State private var isLoading = true
+
+    func fetchSalesHistory() {
+        isLoading = true
+        SupabaseIOSClient.shared.fetchTable(table: "sales") { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                if case .success(let items) = result {
+                    self.salesHistory = items.map { dict in
+                        IOSInvoiceRowModel(
+                            id: "\(dict["id"] ?? "")",
+                            inv: dict["invoice_number"] as? String ?? "INV-\(dict["id"] ?? "")",
+                            customer: dict["customer_name"] as? String ?? "Customer",
+                            date: dict["created_at"] as? String ?? "Recent",
+                            amount: "₹\(Int((dict["total_amount"] as? NSNumber)?.doubleValue ?? 0.0))",
+                            mode: dict["payment_method"] as? String ?? "Cash"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -275,16 +411,34 @@ struct IOSSalesHistoryView: View {
                     Spacer()
                 }
 
-                VStack(spacing: 10) {
-                    IOSInvoiceRow(inv: "INV-2026-001", customer: "Ramesh Textiles", date: "Today, 02:30 PM", amount: "₹3,780", mode: "UPI")
-                    IOSInvoiceRow(inv: "INV-2026-002", customer: "Sharma Hardware", date: "Today, 11:15 AM", amount: "₹1,995", mode: "Cash")
-                    IOSInvoiceRow(inv: "INV-2026-003", customer: "Walk-in Customer", date: "Yesterday, 04:45 PM", amount: "₹997", mode: "Card")
+                if isLoading {
+                    ProgressView("Loading Sales History...").padding(30)
+                } else if salesHistory.isEmpty {
+                    Text("No sales history records.").foregroundColor(.secondary).padding(30)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(salesHistory) { row in
+                            IOSInvoiceRow(inv: row.inv, customer: row.customer, date: row.date, amount: row.amount, mode: row.mode)
+                        }
+                    }
                 }
             }
             .padding(16)
         }
         .background(Color(red: 248/255, green: 250/255, blue: 252/255))
+        .onAppear {
+            fetchSalesHistory()
+        }
     }
+}
+
+struct IOSInvoiceRowModel: Identifiable {
+    let id: String
+    let inv: String
+    let customer: String
+    let date: String
+    let amount: String
+    let mode: String
 }
 
 struct IOSInvoiceRow: View {

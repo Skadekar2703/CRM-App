@@ -40,9 +40,25 @@ struct IOSProfitLossContentView: View {
         isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
     }
 
-    @State private var fromDate = "2026-08-01"
-    @State private var toDate = "2026-09-30"
+    private static var initialFirstOfMonth: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-01"
+        return fmt.string(from: Date())
+    }
+
+    private static var initialToday: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: Date())
+    }
+
+    @State private var fromDate = initialFirstOfMonth
+    @State private var toDate = initialToday
+    @State private var startDateObj = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date())) ?? Date()
+    @State private var endDateObj = Date()
     @State private var toastMsg: String? = nil
+    @State private var udhaari: Double = 0.0
+    @State private var jama: Double = 0.0
     @State private var revenue: Double = 0.0
     @State private var purchases: Double = 0.0
     @State private var expenses: Double = 0.0
@@ -78,14 +94,69 @@ struct IOSProfitLossContentView: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "₹\(Int(amount))"
     }
 
+    func calculateAttributableSalary(employees: [[String: Any]], fromDateStr: String, toDateStr: String) -> Double {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        guard let repStart = fmt.date(from: fromDateStr),
+              let repEnd = fmt.date(from: toDateStr) else { return 0.0 }
+
+        var total = 0.0
+        for emp in employees {
+            let status = ((emp["status"] as? String) ?? "active").lowercased()
+            if status == "inactive" { continue }
+
+            let salary = (emp["salary"] as? Double) ?? (emp["monthly_salary"] as? Double) ?? 0.0
+            if salary <= 0 { continue }
+
+            let salaryType = ((emp["salary_type"] as? String) ?? "Monthly").lowercased()
+
+            var empStart = repStart
+            if let jStr = emp["joined_on"] as? String, !jStr.isEmpty {
+                let prefix = String(jStr.prefix(10))
+                if let jd = fmt.date(from: prefix) {
+                    empStart = jd
+                }
+            }
+
+            var empEnd: Date? = nil
+            if let lStr = emp["left_on"] as? String, !lStr.isEmpty {
+                let prefix = String(lStr.prefix(10))
+                if let ld = fmt.date(from: prefix) {
+                    empEnd = ld
+                }
+            }
+
+            let effStart = max(repStart, empStart)
+            let effEnd = empEnd != nil ? min(repEnd, empEnd!) : repEnd
+
+            if effStart <= effEnd {
+                let days = Double(Calendar.current.dateComponents([.day], from: effStart, to: effEnd).day ?? 0) + 1.0
+                if days > 0 {
+                    if salaryType.contains("day") || salaryType.contains("daily") {
+                        total += salary * days
+                    } else {
+                        total += (salary / 30.0) * days
+                    }
+                }
+            }
+        }
+        return total
+    }
+
     func fetchRealData() {
         // 1. Fetch Sales (Revenue)
         SupabaseIOSClient.shared.fetchTable(table: "sales") { salesRes in
             var rSum = 0.0
             if case .success(let items) = salesRes {
                 for item in items {
-                    let amt = (item["grand_total"] as? Double) ?? (item["total_amount"] as? Double) ?? 0.0
-                    rSum += amt
+                    let status = ((item["status"] as? String) ?? "").lowercased()
+                    if status == "cancelled" { continue }
+
+                    let dtStr = String(((item["sale_date"] as? String) ?? (item["date"] as? String) ?? (item["created_at"] as? String) ?? "").prefix(10))
+                    if dtStr.isEmpty || (dtStr >= self.fromDate && dtStr <= self.toDate) {
+                        let amt = (item["total"] as? Double) ?? (item["grand_total"] as? Double) ?? (item["total_amount"] as? Double) ?? (item["subtotal"] as? Double) ?? 0.0
+                        rSum += amt
+                    }
                 }
             }
 
@@ -94,10 +165,13 @@ struct IOSProfitLossContentView: View {
                 var pSum = 0.0
                 if case .success(let items) = ledgerRes {
                     for item in items {
-                        let type = ((item["transaction_type"] as? String) ?? (item["type"] as? String) ?? "").lowercased()
-                        if type == "purchase" || type == "bill" {
-                            let amt = (item["amount"] as? Double) ?? 0.0
-                            pSum += amt
+                        let dtStr = String(((item["date"] as? String) ?? (item["created_at"] as? String) ?? "").prefix(10))
+                        if dtStr.isEmpty || (dtStr >= self.fromDate && dtStr <= self.toDate) {
+                            let type = ((item["transaction_type"] as? String) ?? (item["type"] as? String) ?? "").lowercased()
+                            if type == "purchase" || type == "bill" || type == "debit" {
+                                let amt = (item["amount"] as? Double) ?? 0.0
+                                pSum += amt
+                            }
                         }
                     }
                 }
@@ -107,32 +181,67 @@ struct IOSProfitLossContentView: View {
                     var eSum = 0.0
                     if case .success(let items) = expRes {
                         for item in items {
-                            let cat = ((item["category"] as? String) ?? "").lowercased()
-                            if !cat.contains("salary") && !cat.contains("labour") {
-                                let amt = (item["amount"] as? Double) ?? 0.0
-                                eSum += amt
+                            let dtStr = String(((item["expense_date"] as? String) ?? (item["date"] as? String) ?? (item["created_at"] as? String) ?? "").prefix(10))
+                            if dtStr.isEmpty || (dtStr >= self.fromDate && dtStr <= self.toDate) {
+                                let cat = ((item["category"] as? String) ?? "").lowercased()
+                                if !cat.contains("salary") && !cat.contains("labour") && !cat.contains("labor") {
+                                    let amt = (item["amount"] as? Double) ?? 0.0
+                                    eSum += amt
+                                }
                             }
                         }
                     }
 
-                    // 4. Fetch Employee Transactions (Salaries)
-                    SupabaseIOSClient.shared.fetchTable(table: "employee_transactions") { empRes in
-                        var sSum = 0.0
-                        if case .success(let items) = empRes {
-                            for item in items {
-                                let type = ((item["type"] as? String) ?? "").lowercased()
-                                if type.contains("salary") || type.contains("bonus") || type.contains("gift") {
-                                    let amt = (item["amount"] as? Double) ?? 0.0
-                                    sSum += amt
-                                }
-                            }
+                    // 4. Fetch Employees (Base Salary Cost) & Employee Transactions
+                    SupabaseIOSClient.shared.fetchTable(table: "employees") { empListRes in
+                        var baseSalarySum = 0.0
+                        if case .success(let emps) = empListRes {
+                            baseSalarySum = self.calculateAttributableSalary(employees: emps, fromDateStr: self.fromDate, toDateStr: self.toDate)
                         }
 
-                        DispatchQueue.main.async {
-                            self.revenue = rSum
-                            self.purchases = pSum
-                            self.expenses = eSum
-                            self.salaries = sSum
+                        SupabaseIOSClient.shared.fetchTable(table: "employee_transactions") { empRes in
+                            var sSum = baseSalarySum
+                            if case .success(let items) = empRes {
+                                for item in items {
+                                    let dtStr = String(((item["date"] as? String) ?? (item["created_at"] as? String) ?? "").prefix(10))
+                                    if dtStr.isEmpty || (dtStr >= self.fromDate && dtStr <= self.toDate) {
+                                        let type = ((item["type"] as? String) ?? "").lowercased()
+                                        if type.contains("salary") || type.contains("bonus") || type.contains("gift") || type.contains("payment") || type.contains("labour") || type.contains("labor") || type.contains("extra") {
+                                            let amt = (item["amount"] as? Double) ?? 0.0
+                                            sSum += amt
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 5. Fetch Udhaari & Jama
+                            SupabaseIOSClient.shared.fetchTable(table: "udhaari") { udhaariRes in
+                                var uSum = 0.0
+                                var jSum = 0.0
+                                if case .success(let items) = udhaariRes {
+                                    for item in items {
+                                        let dtStr = String(((item["date"] as? String) ?? (item["created_at"] as? String) ?? "").prefix(10))
+                                        if dtStr.isEmpty || (dtStr >= self.fromDate && dtStr <= self.toDate) {
+                                            let type = ((item["type"] as? String) ?? "").lowercased()
+                                            let amt = (item["amount"] as? Double) ?? 0.0
+                                            if type == "baki" || type == "udhaar" || type == "debit" || type.contains("baki") || type.contains("udhaar") {
+                                                uSum += amt
+                                            } else if type == "jama" || type == "payment" || type == "credit" || type.contains("jama") || type.contains("payment") {
+                                                jSum += amt
+                                            }
+                                        }
+                                    }
+                                }
+
+                                DispatchQueue.main.async {
+                                    self.revenue = rSum
+                                    self.purchases = pSum
+                                    self.expenses = eSum
+                                    self.salaries = sSum
+                                    self.udhaari = uSum
+                                    self.jama = jSum
+                                }
+                            }
                         }
                     }
                 }
@@ -154,25 +263,33 @@ struct IOSProfitLossContentView: View {
                             .foregroundColor(textPrimary)
 
                         HStack(spacing: 8) {
-                            TextField("FROM", text: $fromDate)
-                                .font(.caption)
-                                .foregroundColor(textPrimary)
-                                .padding(8)
+                            DatePicker("", selection: $startDateObj, displayedComponents: .date)
+                                .labelsHidden()
+                                .padding(4)
                                 .background(cardSecondaryBg)
                                 .cornerRadius(8)
 
-                            TextField("TO", text: $toDate)
+                            Text("to")
                                 .font(.caption)
-                                .foregroundColor(textPrimary)
-                                .padding(8)
+                                .foregroundColor(textMuted)
+
+                            DatePicker("", selection: $endDateObj, displayedComponents: .date)
+                                .labelsHidden()
+                                .padding(4)
                                 .background(cardSecondaryBg)
                                 .cornerRadius(8)
+
+                            Spacer()
 
                             Button(action: {
+                                let fmt = DateFormatter()
+                                fmt.dateFormat = "yyyy-MM-dd"
+                                fromDate = fmt.string(from: startDateObj)
+                                toDate = fmt.string(from: endDateObj)
                                 fetchRealData()
-                                toastMsg = "P&L recalculated from Supabase"
+                                toastMsg = "P&L recalculated for \(fromDate) to \(toDate)"
                             }) {
-                                Text("Show")
+                                Text("Recalculate")
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .padding(.horizontal, 14)
@@ -206,30 +323,38 @@ struct IOSProfitLossContentView: View {
                     // FOUR SUMMARY CARDS
                     VStack(spacing: 10) {
                         HStack(spacing: 10) {
+                            // CARD 1: UDHAARI
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("REVENUE")
+                                Text("UDHAARI")
                                     .font(.caption2)
                                     .fontWeight(.bold)
                                     .foregroundColor(textMuted)
-                                Text(formatINR(revenue))
+                                Text(formatINR(udhaari))
                                     .font(.headline)
                                     .fontWeight(.bold)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(.red)
+                                Text("Customer credit / Baki")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(textMuted)
                             }
                             .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(cardBg)
                             .cornerRadius(12)
 
+                            // CARD 2: JAMA
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("PURCHASES")
+                                Text("JAMA")
                                     .font(.caption2)
                                     .fontWeight(.bold)
                                     .foregroundColor(textMuted)
-                                Text(formatINR(purchases))
+                                Text(formatINR(jama))
                                     .font(.headline)
                                     .fontWeight(.bold)
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(.green)
+                                Text("Payments received")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(textMuted)
                             }
                             .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -238,21 +363,26 @@ struct IOSProfitLossContentView: View {
                         }
 
                         HStack(spacing: 10) {
+                            // CARD 3: SALARIES
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("EXPENSES + SALARIES")
+                                Text("SALARIES")
                                     .font(.caption2)
                                     .fontWeight(.bold)
                                     .foregroundColor(textMuted)
-                                Text(formatINR(expensesPlusSalaries))
+                                Text(formatINR(salaries))
                                     .font(.headline)
                                     .fontWeight(.bold)
-                                    .foregroundColor(.red)
+                                    .foregroundColor(.orange)
+                                Text("Employee / labour cost")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(textMuted)
                             }
                             .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(cardBg)
                             .cornerRadius(12)
 
+                            // CARD 4: NET PROFIT
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(isLoss ? "NET LOSS" : "NET PROFIT")
                                     .font(.caption2)
@@ -262,6 +392,9 @@ struct IOSProfitLossContentView: View {
                                     .font(.headline)
                                     .fontWeight(.bold)
                                     .foregroundColor(isLoss ? .red : .green)
+                                Text("Revenue − all costs")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(textMuted)
                             }
                             .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -322,7 +455,7 @@ struct IOSProfitLossContentView: View {
                                 .accentColor(.blue)
 
                             HStack {
-                                Text("Expenses")
+                                Text("Operating Expenses")
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundColor(.red)
@@ -336,7 +469,7 @@ struct IOSProfitLossContentView: View {
                                 .accentColor(.red)
 
                             HStack {
-                                Text("Salaries")
+                                Text("Employee / Labour")
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundColor(.orange)

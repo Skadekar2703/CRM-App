@@ -5,7 +5,7 @@ import { DeleteTransportDialog } from './DeleteTransportDialog';
 import { supabase } from '../../lib/supabase';
 import './Transports.css';
 
-export const WebTransportsScreen: React.FC = () => {
+export const WebTransportsScreen: React.FC<{ userRole?: string }> = ({ userRole = 'ADMIN' }) => {
   const [transports, setTransports] = useState<Transport[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState<number>(10);
@@ -432,7 +432,7 @@ export const WebTransportsScreen: React.FC = () => {
           <div className="transports-footer">
             <div>
               Showing {totalEntries > 0 ? startIndex + 1 : 0} to{' '}
-              {Math.min(startIndex + entriesPerPage, totalEntries)} of 45 entries
+              {Math.min(startIndex + entriesPerPage, totalEntries)} of {totalEntries} entries
             </div>
 
             <div className="pagination-buttons">
@@ -486,6 +486,7 @@ export const WebTransportsScreen: React.FC = () => {
         <DeleteTransportDialog
           isOpen={deletingTransport !== null}
           transport={deletingTransport}
+          userRole={userRole}
           onClose={() => setDeletingTransport(null)}
           onConfirm={handleConfirmDelete}
         />

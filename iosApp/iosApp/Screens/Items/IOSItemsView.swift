@@ -75,16 +75,34 @@ struct IOSItemsContentView: View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // SEARCH BAR
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(textMuted)
-                        TextField("Search items...", text: $searchQuery)
+                    // SEARCH BAR & REFRESH BUTTON
+                    HStack(spacing: 10) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(textMuted)
+                            TextField("Search items...", text: $searchQuery)
+                        }
+                        .padding(12)
+                        .background(cardBg)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 226/255, green: 232/255, blue: 240/255), lineWidth: 1))
+
+                        Button(action: {
+                            fetchItemsFromSupabase()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Refresh")
+                                    .fontWeight(.bold)
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(primaryBlue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
                     }
-                    .padding(12)
-                    .background(cardBg)
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 226/255, green: 232/255, blue: 240/255), lineWidth: 1))
 
                     // ITEMS LIST
                     if filteredItems.isEmpty {

@@ -1,6 +1,8 @@
 package com.example.crm_app_kmp.ui.profitloss
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +20,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +48,23 @@ import com.example.crm_app_kmp.profitloss.ProfitLossReport
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 
+private fun getTodayISO(): String {
+    val cal = java.util.Calendar.getInstance()
+    return String.format("%04d-%02d-%02d", cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
+}
+
+private fun getFirstOfMonthISO(): String {
+    val cal = java.util.Calendar.getInstance()
+    return String.format("%04d-%02d-01", cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+}
+
+private fun getFirstOfWeekISO(): String {
+    val cal = java.util.Calendar.getInstance()
+    cal.firstDayOfWeek = java.util.Calendar.MONDAY
+    cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
+    return String.format("%04d-%02d-%02d", cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AndroidProfitLossContent() {
@@ -52,82 +72,27 @@ fun AndroidProfitLossContent() {
     val supabaseClient = remember { SupabaseAndroidClient(context) }
     val scope = rememberCoroutineScope()
 
-    var fromDate by remember { mutableStateOf("2026-08-01") }
-    var toDate by remember { mutableStateOf("2026-09-30") }
+    var fromDate by remember { mutableStateOf(getFirstOfMonthISO()) }
+    var toDate by remember { mutableStateOf(getTodayISO()) }
+    var activeChip by remember { mutableStateOf("This Month") }
     var toastMsg by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
     var report by remember {
         mutableStateOf(
-            ProfitLossCalculator.calculate("2026-08-01", "2026-09-30", 0.0, 0.0, 0.0, 0.0)
+            ProfitLossCalculator.calculate(getFirstOfMonthISO(), getTodayISO(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         )
     }
 
     fun fetchAndCalculatePL() {
         scope.launch {
             isLoading = true
-            var revenueSum = 0.0
-            var purchasesSum = 0.0
-            var expensesSum = 0.0
-            var salariesSum = 0.0
-
-            // 1. REVENUE (sales)
-            val salesRes = supabaseClient.fetchTable("sales")
-            salesRes.onSuccess { arr ->
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val amt = obj.optDouble("grand_total", obj.optDouble("total_amount", 0.0))
-                    revenueSum += amt
-                }
+            val res = supabaseClient.fetchProfitLossReport(fromDate, toDate)
+            res.onSuccess { rep ->
+                report = rep
+            }.onFailure { err ->
+                toastMsg = "Error: ${err.message}"
             }
-
-            // 2. PURCHASES (supplier_ledger)
-            val ledgerRes = supabaseClient.fetchTable("supplier_ledger")
-            ledgerRes.onSuccess { arr ->
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val type = obj.optString("transaction_type", obj.optString("type", "")).lowercase()
-                    if (type == "purchase" || type == "bill") {
-                        val amt = obj.optDouble("amount", 0.0)
-                        purchasesSum += amt
-                    }
-                }
-            }
-
-            // 3. EXPENSES (expenses table, excluding Salary)
-            val expRes = supabaseClient.fetchTable("expenses")
-            expRes.onSuccess { arr ->
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val cat = obj.optString("category", "").lowercase()
-                    if (!cat.contains("salary") && !cat.contains("labour")) {
-                        val amt = obj.optDouble("amount", 0.0)
-                        expensesSum += amt
-                    }
-                }
-            }
-
-            // 4. EMPLOYEE / LABOUR (employee_transactions)
-            val empTxRes = supabaseClient.fetchTable("employee_transactions")
-            empTxRes.onSuccess { arr ->
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val type = obj.optString("type", "").lowercase()
-                    if (type.contains("salary") || type.contains("bonus") || type.contains("gift")) {
-                        val amt = obj.optDouble("amount", 0.0)
-                        salariesSum += amt
-                    }
-                }
-            }
-
-            report = ProfitLossCalculator.calculate(
-                fromDate = fromDate,
-                toDate = toDate,
-                revenue = revenueSum,
-                purchases = purchasesSum,
-                expenses = expensesSum,
-                salaries = salariesSum
-            )
             isLoading = false
         }
     }
@@ -153,52 +118,105 @@ fun AndroidProfitLossContent() {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Report Period", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Report Period", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+
+                    // QUICK DATE RANGE CHIPS
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("Today", "This Week", "This Month", "Custom").forEach { chip ->
+                            val isSelected = activeChip == chip
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable {
+                                        activeChip = chip
+                                        val todayStr = getTodayISO()
+                                        when (chip) {
+                                            "Today" -> {
+                                                fromDate = todayStr
+                                                toDate = todayStr
+                                            }
+                                            "This Week" -> {
+                                                fromDate = getFirstOfWeekISO()
+                                                toDate = todayStr
+                                            }
+                                            "This Month" -> {
+                                                fromDate = getFirstOfMonthISO()
+                                                toDate = todayStr
+                                            }
+                                        }
+                                        fetchAndCalculatePL()
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = chip,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = fromDate,
-                        onValueChange = { fromDate = it },
-                        placeholder = { Text("YYYY-MM-DD", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        com.example.crm_app_kmp.ui.components.AppDatePicker(
+                            label = "Start Date",
+                            value = fromDate,
+                            onDateSelected = {
+                                fromDate = it
+                                activeChip = "Custom"
+                            }
+                        )
+                    }
 
-                    OutlinedTextField(
-                        value = toDate,
-                        onValueChange = { toDate = it },
-                        placeholder = { Text("YYYY-MM-DD", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-
-                    Button(
-                        onClick = {
-                            fetchAndCalculatePL()
-                            toastMsg = "Report recalculated from Supabase."
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.height(54.dp)
-                    ) {
-                        Text("Show", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Box(modifier = Modifier.weight(1f)) {
+                        com.example.crm_app_kmp.ui.components.AppDatePicker(
+                            label = "End Date",
+                            value = toDate,
+                            onDateSelected = {
+                                toDate = it
+                                activeChip = "Custom"
+                            }
+                        )
                     }
                 }
 
-                Text("Selected: ${report.fromDate} to ${report.toDate}", fontSize = 11.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(
+                    onClick = {
+                        fetchAndCalculatePL()
+                        toastMsg = "Report recalculated from Supabase."
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.height(20.dp).width(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Recalculate Profit & Loss", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                Text("Selected: ${report.fromDate} to ${report.toDate}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -222,61 +240,61 @@ fun AndroidProfitLossContent() {
         // FOUR SUMMARY CARDS GRID (2x2)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // REVENUE
+                // CARD 1: UDHAARI
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("REVENUE", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        Text(ProfitLossCalculator.formatINR(report.revenue), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
-                        Text("Total sales", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("UDHAARI", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Text(ProfitLossCalculator.formatINR(report.udhaari), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
+                        Text("Customer credit / Baki", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
-                // PURCHASES
+                // CARD 2: JAMA
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("PURCHASES", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        Text(ProfitLossCalculator.formatINR(report.purchases), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
-                        Text("Supplier purchases", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("JAMA", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Text(ProfitLossCalculator.formatINR(report.jama), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                        Text("Payments received", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // EXPENSES + SALARIES
+                // CARD 3: SALARIES
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("EXPENSES + SALARIES", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        Text(ProfitLossCalculator.formatINR(report.expensesPlusSalaries), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
-                        Text("Operating & staff costs", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("SALARIES", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Text(ProfitLossCalculator.formatINR(report.salaries), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                        Text("Employee / labour cost", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
-                // NET PROFIT
+                // CARD 4: NET PROFIT
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(if (report.isLoss) "NET LOSS" else "NET PROFIT", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Text(if (report.isLoss) "NET LOSS" else "NET PROFIT", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                         Text(ProfitLossCalculator.formatINR(report.netProfit), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (report.isLoss) ErrorRed else Color(0xFF16A34A))
-                        Text("Revenue - all costs", fontSize = 10.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Revenue − all costs", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -286,15 +304,15 @@ fun AndroidProfitLossContent() {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("P&L Statement", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-                HorizontalDivider(color = androidx.compose.material3.MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                Text("P&L Statement", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 report.statementItems.forEach { item ->
                     Row(
@@ -306,7 +324,7 @@ fun AndroidProfitLossContent() {
                             text = item.label,
                             fontSize = if (item.isHighlight) 15.sp else 14.sp,
                             fontWeight = if (item.isHighlight) FontWeight.Bold else FontWeight.SemiBold,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Text(
@@ -320,8 +338,8 @@ fun AndroidProfitLossContent() {
                             }
                         )
                     }
-                    if (item.isHighlight) HorizontalDivider(color = androidx.compose.material3.MaterialTheme.colorScheme.outline, thickness = 2.dp)
-                    else HorizontalDivider(color = androidx.compose.material3.MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    if (item.isHighlight) HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 2.dp)
+                    else HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 }
             }
         }
@@ -330,20 +348,20 @@ fun AndroidProfitLossContent() {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Cost vs Profit Breakdown", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                Text("Cost vs Profit Breakdown", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 
                 // PURCHASES BAR
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Purchases", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
-                        Text("${ProfitLossCalculator.formatINR(report.purchases)} (${(purchasesPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                        Text("${ProfitLossCalculator.formatINR(report.purchases)} (${(purchasesPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Box(
                         modifier = Modifier
@@ -365,8 +383,8 @@ fun AndroidProfitLossContent() {
                 // EXPENSES BAR
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Expenses", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
-                        Text("${ProfitLossCalculator.formatINR(report.expenses)} (${(expensesPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                        Text("Operating Expenses", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
+                        Text("${ProfitLossCalculator.formatINR(report.expenses)} (${(expensesPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Box(
                         modifier = Modifier
@@ -388,8 +406,8 @@ fun AndroidProfitLossContent() {
                 // SALARIES BAR
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Salaries", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
-                        Text("${ProfitLossCalculator.formatINR(report.salaries)} (${(salariesPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                        Text("Employee / Labour", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                        Text("${ProfitLossCalculator.formatINR(report.salaries)} (${(salariesPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Box(
                         modifier = Modifier
@@ -411,8 +429,8 @@ fun AndroidProfitLossContent() {
                 // NET PROFIT BAR
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Net Profit", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
-                        Text("${ProfitLossCalculator.formatINR(report.breakdown.netProfit)} (${(netProfitPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
+                        Text("Net Profit Margin", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                        Text("${ProfitLossCalculator.formatINR(report.breakdown.netProfit)} (${(netProfitPct * 100).toInt()}%)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Box(
                         modifier = Modifier

@@ -467,6 +467,7 @@ private fun NoteFormDialog(
     var content by remember { mutableStateOf(editingNote?.content ?: "") }
     var isUrgent by remember { mutableStateOf(editingNote?.isUrgent ?: false) }
     var isPinned by remember { mutableStateOf(editingNote?.isPinned ?: false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -475,8 +476,10 @@ private fun NoteFormDialog(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -484,7 +487,7 @@ private fun NoteFormDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (editingNote != null) "Edit Note" else "Create New Note",
+                        text = if (editingNote != null) "Edit Note" else "Add New Note",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -494,65 +497,86 @@ private fun NoteFormDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text("Content / Description") },
-                    minLines = 3,
-                    maxLines = 5,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = isUrgent,
-                        onCheckedChange = { isUrgent = it },
-                        colors = CheckboxDefaults.colors(checkedColor = ErrorRed)
-                    )
-                    Text("Mark as High Priority / Urgent", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = isPinned,
-                        onCheckedChange = { isPinned = it },
-                        colors = CheckboxDefaults.colors(checkedColor = PrimaryBlue)
-                    )
-                    Text("Pin to top of Notepad", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
-                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            if (title.isNotBlank()) {
-                                onSave(title, content, isUrgent, isPinned)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                errorMsg?.let { err ->
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Save Note")
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = title,
+                            onValueChange = { title = it; errorMsg = null },
+                            label = "Note Title",
+                            placeholder = "e.g. Payment Clearance Needed",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = content,
+                            onValueChange = { content = it; errorMsg = null },
+                            label = "Note Content",
+                            placeholder = "Enter detailed note content or action items...",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = isUrgent,
+                                onCheckedChange = { isUrgent = it },
+                                colors = CheckboxDefaults.colors(checkedColor = ErrorRed)
+                            )
+                            Text("Mark as Urgent", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
+                        }
+                    }
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = isPinned,
+                                onCheckedChange = { isPinned = it },
+                                colors = CheckboxDefaults.colors(checkedColor = PrimaryBlue)
+                            )
+                            Text("Pin to Top", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingNote != null) "Save Changes" else "Save Note",
+                            onClick = {
+                                if (title.isBlank()) {
+                                    errorMsg = "Note Title is required"
+                                    return@AppFormButton
+                                }
+                                if (content.isBlank()) {
+                                    errorMsg = "Note Content is required"
+                                    return@AppFormButton
+                                }
+                                onSave(title.trim(), content.trim(), isUrgent, isPinned)
+                            }
+                        )
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 private fun DeleteNoteConfirmDialog(

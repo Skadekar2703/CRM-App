@@ -4,7 +4,57 @@ import { EmployeeModal } from './EmployeeModal';
 import { EmployeeTransactionModal } from './EmployeeTransactionModal';
 import { DeleteEmployeeDialog } from './DeleteEmployeeDialog';
 import { supabase } from '../../lib/supabase';
+import { getSignedPhotoUrl } from '../../utils/photoUtils';
 import '../Udhaari/Udhaari.css';
+
+const EmployeeAvatar: React.FC<{ photoUrl?: string; name: string; size?: number; fontSize?: number }> = ({
+  photoUrl,
+  name,
+  size = 40,
+  fontSize = 15
+}) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photoUrl) {
+      setSignedUrl(null);
+      return;
+    }
+    if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:') || photoUrl.startsWith('http')) {
+      setSignedUrl(photoUrl);
+      return;
+    }
+    getSignedPhotoUrl(photoUrl).then((url) => setSignedUrl(url));
+  }, [photoUrl]);
+
+  if (signedUrl) {
+    return (
+      <div style={{ width: `${size}px`, height: `${size}px`, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+        <img src={signedUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        backgroundColor: '#2563eb',
+        color: '#ffffff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 700,
+        fontSize: `${fontSize}px`,
+        flexShrink: 0
+      }}
+    >
+      {name ? name.charAt(0).toUpperCase() : 'E'}
+    </div>
+  );
+};
 
 const formatDateDisplay = (dateStr?: string) => {
   if (!dateStr) return 'N/A';
@@ -17,7 +67,12 @@ const formatDateDisplay = (dateStr?: string) => {
   }
 };
 
-export const WebEmployeesScreen: React.FC = () => {
+interface WebEmployeesScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebEmployeesScreen: React.FC<WebEmployeesScreenProps> = ({ userRole }) => {
+  const [role, setRole] = useState<string>(userRole ? String(userRole).toUpperCase() : 'STAFF');
   const [employees, setEmployees] = useState<WebEmployee[]>([]);
   const [transactions, setTransactions] = useState<WebEmployeeTransaction[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,9 +141,9 @@ export const WebEmployeesScreen: React.FC = () => {
             photoUrl: item.photo_url || '',
             remark: item.remark || '',
             activeDays: activeDays,
-            salary: Number(item.salary || 25000),
+            salary: Number(item.salary !== undefined && item.salary !== null ? item.salary : 0),
             salaryType: item.salary_type || 'Monthly',
-            ctcYtd: Number(item.ctc_ytd || 300000),
+            ctcYtd: Number(item.ctc_ytd !== undefined && item.ctc_ytd !== null ? item.ctc_ytd : (Number(item.salary || 0) * 12)),
             udhaarBalance: Number(item.udhaar_balance || 0),
             status: item.status || 'Active'
           };
@@ -123,8 +178,27 @@ export const WebEmployeesScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('users').select('role').eq('id', user.id).single();
+          if (data?.role) {
+            setRole(String(data.role).toUpperCase());
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (userRole) {
+      setRole(String(userRole).toUpperCase());
+    } else {
+      fetchUserRole();
+    }
     fetchAllData();
-  }, []);
+  }, [userRole]);
 
   // SUMMARIES
   const totalEmployees = employees.length;
@@ -186,112 +260,113 @@ export const WebEmployeesScreen: React.FC = () => {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id;
 
+    // Fetch authenticated business ID
+    const { data: memberData } = await supabase
+      .from('business_members')
+      .select('business_id')
+      .limit(1)
+      .single();
+    const businessId = memberData?.business_id || '00000000-0000-0000-0000-000000000001';
+
+    const submittedSalary = Number(employeeData.salary !== undefined && employeeData.salary !== null ? employeeData.salary : 0);
+
     const fullPayload: any = {
       uid: employeeData.uid,
       name: employeeData.name,
       mobile: employeeData.mobile,
       phone: employeeData.mobile,
-      email: employeeData.email,
-      role: employeeData.role,
+      email: employeeData.email || null,
+      role: employeeData.role || 'Staff',
       salary_type: employeeData.salaryType || 'Monthly',
-      salary: Number(employeeData.salary || 0),
-      address: employeeData.address,
-      bank_name: employeeData.bankName,
-      bank_account: employeeData.bankAccount,
-      id_number: employeeData.idNumber,
-      emergency_contact: employeeData.emergencyContact,
+      salary: submittedSalary,
+      address: employeeData.address || null,
+      bank_name: employeeData.bankName || null,
+      bank_account: employeeData.bankAccount || null,
+      id_number: employeeData.idNumber || null,
+      emergency_contact: employeeData.emergencyContact || null,
       joined_on: employeeData.joinedOn,
       left_on: employeeData.leftOn || null,
-      photo_url: employeeData.photoUrl,
-      remark: employeeData.remark,
-      status: employeeData.status || 'Active'
-    };
-
-    // Baseline payload fallback for legacy tables
-    const basePayload: any = {
-      name: employeeData.name,
-      role: employeeData.role || 'Staff',
-      status: employeeData.status || 'Active'
+      photo_url: employeeData.photoUrl || null,
+      remark: employeeData.remark || null,
+      status: employeeData.status || 'Active',
+      business_id: businessId
     };
 
     if (userId) {
       fullPayload.user_id = userId;
-      basePayload.user_id = userId;
     }
+
+    const tryInsertOrUpdate = async (payloadToTry: any, isUpdate: boolean, targetId?: string) => {
+      let currentPayload = { ...payloadToTry };
+      let lastError: any = null;
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        let res;
+        if (isUpdate) {
+          res = await supabase
+            .from('employees')
+            .update(currentPayload)
+            .eq('id', targetId)
+            .select();
+        } else {
+          res = await supabase
+            .from('employees')
+            .insert([currentPayload])
+            .select();
+        }
+
+        if (!res.error) {
+          return res.data;
+        }
+
+        lastError = res.error;
+        const msg = res.error.message || '';
+
+        // If a specific column is missing from schema cache, extract the column name and remove only that column
+        const missingColMatch = msg.match(/Could not find the '([^']+)' column/) ||
+                                msg.match(/column "([^"]+)" of relation "employees" does not exist/);
+
+        if (missingColMatch && missingColMatch[1]) {
+          const colToRemove = missingColMatch[1];
+          console.warn(`[Employees] Database schema missing column '${colToRemove}'. Retrying without it...`);
+          delete currentPayload[colToRemove];
+          continue;
+        }
+
+        break;
+      }
+
+      throw lastError;
+    };
 
     if (editingEmployee && editingEmployee.id) {
       // UPDATE SUPABASE
-      let { error } = await supabase
-        .from('employees')
-        .update(fullPayload)
-        .eq('id', editingEmployee.id);
-
-      if (error && (error.message.includes('column') || error.message.includes('schema cache'))) {
-        console.warn('Falling back to basic update columns due to missing DB columns in schema');
-        let retry = await supabase
-          .from('employees')
-          .update(basePayload)
-          .eq('id', editingEmployee.id);
-        
-        if (retry.error && (retry.error.message.includes('column') || retry.error.message.includes('schema cache'))) {
-          retry = await supabase
-            .from('employees')
-            .update({ name: employeeData.name })
-            .eq('id', editingEmployee.id);
+      try {
+        const data = await tryInsertOrUpdate(fullPayload, true, editingEmployee.id);
+        if (data && data.length > 0) {
+          const savedRow = data[0];
+          console.log('[Employees] Updated employee in Supabase:', savedRow);
         }
-
-        if (!retry.error) {
-          showToast(`Employee "${employeeData.name}" updated (Name only). Run 'supabase_employee_v2_extension.sql' in SQL Editor for full fields.`);
-          await fetchAllData();
-          return;
-        } else {
-          error = retry.error;
-        }
-      }
-
-      if (error) {
+        showToast(`Employee "${employeeData.name}" updated successfully.`);
+      } catch (error: any) {
         console.error('Error updating employee:', error);
         showToast(`Error updating employee: ${error.message}`, true);
         throw new Error(`Failed to update employee: ${error.message}`);
       }
-
-      showToast(`Employee "${employeeData.name}" updated successfully.`);
     } else {
       // INSERT SUPABASE
-      let { error } = await supabase
-        .from('employees')
-        .insert([fullPayload]);
-
-      if (error && (error.message.includes('column') || error.message.includes('schema cache'))) {
-        console.warn('Falling back to basic insert columns due to missing DB columns in schema');
-        let retry = await supabase
-          .from('employees')
-          .insert([basePayload]);
-
-        if (retry.error && (retry.error.message.includes('column') || retry.error.message.includes('schema cache'))) {
-          const minimalPayload: any = { name: employeeData.name };
-          if (userId) minimalPayload.user_id = userId;
-          retry = await supabase
-            .from('employees')
-            .insert([minimalPayload]);
+      try {
+        const data = await tryInsertOrUpdate(fullPayload, false);
+        if (data && data.length > 0) {
+          const savedRow = data[0];
+          console.log('[Employees] Inserted employee in Supabase:', savedRow);
         }
-
-        if (!retry.error) {
-          showToast(`Employee "${employeeData.name}" added (Name only). Run 'supabase_employee_v2_extension.sql' in SQL Editor for full fields.`);
-          await fetchAllData();
-          return;
-        } else {
-          error = retry.error;
-        }
-      }
-
-      if (error) {
+        showToast(`Employee "${employeeData.name}" added successfully.`);
+      } catch (error: any) {
         console.error('Error adding employee:', error);
         showToast(`Error adding employee: ${error.message}`, true);
         throw new Error(`Failed to add employee: ${error.message}`);
       }
-
-      showToast(`Employee "${employeeData.name}" added successfully.`);
     }
     await fetchAllData();
   };
@@ -620,13 +695,7 @@ export const WebEmployeesScreen: React.FC = () => {
                       <td style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: '12px' }}>{emp.uid}</td>
                       <td>
                         <div className="udhaari-customer-cell" style={{ cursor: 'pointer' }} onClick={() => setSelectedEmployeeDetails(emp)}>
-                          <div className="customer-initial-avatar green-light" style={{ overflow: 'hidden' }}>
-                            {emp.photoUrl ? (
-                              <img src={emp.photoUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                            ) : (
-                              emp.name.charAt(0).toUpperCase()
-                            )}
-                          </div>
+                          <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size={36} fontSize={14} />
                           <div>
                             <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{emp.name}</div>
                             {emp.idNumber && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ID: {emp.idNumber}</div>}
@@ -685,15 +754,17 @@ export const WebEmployeesScreen: React.FC = () => {
                             </svg>
                           </button>
 
-                          <button
-                            className="action-btn-icon delete"
-                            onClick={() => handleDeleteEmployeeClick(emp)}
-                            title="Delete Employee"
-                          >
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          {role === 'ADMIN' && (
+                            <button
+                              className="action-btn-icon delete"
+                              onClick={() => handleDeleteEmployeeClick(emp)}
+                              title="Delete Employee"
+                            >
+                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -759,6 +830,7 @@ export const WebEmployeesScreen: React.FC = () => {
         <DeleteEmployeeDialog
           isOpen={deletingEmployee !== null}
           employee={deletingEmployee}
+          userRole={role}
           onClose={() => setDeletingEmployee(null)}
           onConfirm={handleConfirmDelete}
         />
@@ -787,13 +859,7 @@ export const WebEmployeesScreen: React.FC = () => {
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* PROFILE TOP HEADER */}
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center', backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div className="customer-initial-avatar green-light" style={{ width: '56px', height: '56px', fontSize: '24px' }}>
-                    {selectedEmployeeDetails.photoUrl ? (
-                      <img src={selectedEmployeeDetails.photoUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                    ) : (
-                      selectedEmployeeDetails.name.charAt(0).toUpperCase()
-                    )}
-                  </div>
+                  <EmployeeAvatar photoUrl={selectedEmployeeDetails.photoUrl} name={selectedEmployeeDetails.name} size={56} fontSize={24} />
 
                   <div style={{ flex: 1 }}>
                     <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>{selectedEmployeeDetails.name}</h2>

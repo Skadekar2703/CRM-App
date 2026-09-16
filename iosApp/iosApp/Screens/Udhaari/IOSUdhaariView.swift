@@ -48,6 +48,7 @@ struct IOSUdhaariContentView: View {
 
     @State private var editingCustomer: UdhaariCustomerIOSItem? = nil
     @State private var deletingCustomer: UdhaariCustomerIOSItem? = nil
+    @State private var userRole: String = "STAFF"
 
     @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
@@ -72,15 +73,40 @@ struct IOSUdhaariContentView: View {
 
     func fetchCustomers() {
         SupabaseIOSClient.shared.fetchTable(table: "customers") { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let items):
-                    self.customers = items.map { item in
-                        let rawBaki = (item["baki"] as? NSNumber)?.doubleValue ?? 0.0
-                        let rawJama = (item["jama"] as? NSNumber)?.doubleValue ?? 0.0
-                        let currentBaki = max(0.0, rawBaki - rawJama)
-                        let photoStr = item["photo_url"] as? String
-                        return UdhaariCustomerIOSItem(
+            switch result {
+            case .success(let items):
+                let group = DispatchGroup()
+                var mappedItems: [UdhaariCustomerIOSItem] = []
+                let lock = NSLock()
+
+                for item in items {
+                    let rawBaki = (item["baki"] as? NSNumber)?.doubleValue ?? 0.0
+                    let rawJama = (item["jama"] as? NSNumber)?.doubleValue ?? 0.0
+                    let currentBaki = max(0.0, rawBaki - rawJama)
+                    let photoStr = item["photo_url"] as? String
+
+                    group.enter()
+                    if let photoPath = photoStr, !photoPath.isEmpty {
+                        SupabaseIOSClient.shared.createSignedPhotoUrl(path: photoPath) { signedUrl in
+                            lock.lock()
+                            mappedItems.append(UdhaariCustomerIOSItem(
+                                id: item["id"] as? String ?? UUID().uuidString,
+                                name: item["name"] as? String ?? "Customer",
+                                mobile: item["phone"] as? String ?? "",
+                                area: item["area"] as? String ?? "Local Market",
+                                cibilStatus: item["cibil_status"] as? String ?? "Good",
+                                baki: currentBaki,
+                                jama: rawJama,
+                                outstanding: currentBaki,
+                                lastTxnDate: "Recent",
+                                photoUrl: signedUrl ?? photoPath
+                            ))
+                            lock.unlock()
+                            group.leave()
+                        }
+                    } else {
+                        lock.lock()
+                        mappedItems.append(UdhaariCustomerIOSItem(
                             id: item["id"] as? String ?? UUID().uuidString,
                             name: item["name"] as? String ?? "Customer",
                             mobile: item["phone"] as? String ?? "",
@@ -90,10 +116,18 @@ struct IOSUdhaariContentView: View {
                             jama: rawJama,
                             outstanding: currentBaki,
                             lastTxnDate: "Recent",
-                            photoUrl: photoStr
-                        )
+                            photoUrl: nil
+                        ))
+                        lock.unlock()
+                        group.leave()
                     }
-                case .failure:
+                }
+
+                group.notify(queue: .main) {
+                    self.customers = mappedItems
+                }
+            case .failure:
+                DispatchQueue.main.async {
                     self.customers = []
                 }
             }
@@ -190,6 +224,7 @@ struct IOSUdhaariContentView: View {
                             ForEach(filteredCustomers) { c in
                                 IOSUdhaariCustomerCard(
                                     customer: c,
+                                    userRole: userRole,
                                     onAddBaki: {
                                         presetTxnType = "Baki"
                                         selectedTxnCustomerUid = c.id
@@ -209,7 +244,9 @@ struct IOSUdhaariContentView: View {
                                         showCustomerSheet = true
                                     },
                                     onDelete: {
-                                        deletingCustomer = c
+                                        if userRole == "ADMIN" {
+                                            deletingCustomer = c
+                                        }
                                     }
                                 )
                             }
@@ -299,19 +336,19 @@ struct IOSUdhaariContentView: View {
         }
         .sheet(isPresented: $showHistorySheet) {
             if let target = historyCustomer {
-                IOSUdhaariHistorySheet(customer: target, onRefresh: { self.fetchCustomers() })
+                IOSUdhaariHistorySheet(customer: target, userRole: userRole, onRefresh: { self.fetchCustomers() })
             }
         }
-        .alert(item: $deletingCustomer) { target in
-            Alert(
-                title: Text("Delete Customer?"),
-                message: Text("Are you sure you want to delete '\(target.name)'?"),
-                primaryButton: .destructive(Text("Delete")) {
+        .sheet(item: $deletingCustomer) { target in
+            IOSThreeStepDeleteSheet(
+                itemName: "Udhaari Customer: \(target.name)",
+                itemDetails: "ID: \(target.id) | Area: \(target.area)",
+                userRole: userRole,
+                onConfirmDelete: {
                     SupabaseIOSClient.shared.deleteRecord(table: "customers", id: target.id) { _ in
                         self.fetchCustomers()
                     }
-                },
-                secondaryButton: .cancel()
+                }
             )
         }
     }
@@ -319,6 +356,7 @@ struct IOSUdhaariContentView: View {
 
 struct IOSUdhaariCustomerCard: View {
     let customer: UdhaariCustomerIOSItem
+    var userRole: String = "STAFF"
     var onAddBaki: () -> Void
     var onAddJama: () -> Void
     var onViewHistory: () -> Void
@@ -474,6 +512,17 @@ struct IOSUdhaariCustomerCard: View {
                             .background(Color(red: 241/255, green: 245/255, blue: 249/255))
                             .clipShape(Circle())
                     }
+
+                    if userRole.uppercased() == "ADMIN" {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundColor(errorRed)
+                                .frame(width: 28, height: 28)
+                                .background(Color(red: 254/255, green: 242/255, blue: 242/255))
+                                .clipShape(Circle())
+                        }
+                    }
                 }
             }
         }
@@ -486,16 +535,19 @@ struct IOSUdhaariCustomerCard: View {
 
 struct IOSUdhaariHistorySheet: View {
     let customer: UdhaariCustomerIOSItem
+    var userRole: String = "STAFF"
     var onRefresh: () -> Void
 
     @Environment(\.presentationMode) var presentationMode
     @State private var transactions: [[String: Any]] = []
+    @State private var deletingTxn: [String: Any]? = nil
 
     var body: some View {
         NavigationView {
             List {
                 ForEach(0..<transactions.count, id: \.self) { idx in
                     let item = transactions[idx]
+                    let id = item["id"] as? String ?? ""
                     let type = item["type"] as? String ?? "Baki"
                     let amt = (item["amount"] as? NSNumber)?.doubleValue ?? 0.0
                     let notes = item["notes"] as? String ?? "Entry"
@@ -512,21 +564,62 @@ struct IOSUdhaariHistorySheet: View {
                         Text(formatIndianCurrencySwift(amt))
                             .fontWeight(.bold)
                             .foregroundColor(type == "Baki" ? .red : .green)
+
+                        if userRole.uppercased() == "ADMIN" {
+                            Button(action: { deletingTxn = item }) {
+                                Image(systemName: "trash")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                            .padding(.leading, 8)
+                        }
                     }
                 }
             }
             .navigationBarTitle("History — \(customer.name)", displayMode: .inline)
             .navigationBarItems(trailing: Button("Done") { presentationMode.wrappedValue.dismiss() })
             .onAppear {
-                SupabaseIOSClient.shared.fetchTable(table: "udhaari") { res in
-                    if case .success(let items) = res {
-                        DispatchQueue.main.async {
-                            self.transactions = items.filter { ($0["customer_id"] as? String) == customer.id || ($0["customer_name"] as? String) == customer.name }
+                fetchLogs()
+            }
+            .sheet(item: Binding<UdhaariTxnTarget?>(
+                get: { deletingTxn != nil ? UdhaariTxnTarget(dict: deletingTxn!) : nil },
+                set: { if $0 == nil { deletingTxn = nil } }
+            )) { target in
+                IOSThreeStepDeleteSheet(
+                    itemName: "Udhaari Entry: \(target.type) ₹\(Int(target.amount))",
+                    itemDetails: "Customer: \(customer.name)",
+                    userRole: userRole,
+                    onConfirmDelete: {
+                        SupabaseIOSClient.shared.deleteRecord(table: "udhaari", id: target.id) { _ in
+                            fetchLogs()
+                            onRefresh()
                         }
                     }
+                )
+            }
+        }
+    }
+
+    private func fetchLogs() {
+        SupabaseIOSClient.shared.fetchTable(table: "udhaari") { res in
+            if case .success(let items) = res {
+                DispatchQueue.main.async {
+                    self.transactions = items.filter { ($0["customer_id"] as? String) == customer.id || ($0["customer_name"] as? String) == customer.name }
                 }
             }
         }
+    }
+}
+
+struct UdhaariTxnTarget: Identifiable {
+    let id: String
+    let type: String
+    let amount: Double
+
+    init(dict: [String: Any]) {
+        self.id = dict["id"] as? String ?? ""
+        self.type = dict["type"] as? String ?? "Baki"
+        self.amount = (dict["amount"] as? NSNumber)?.doubleValue ?? 0.0
     }
 }
 

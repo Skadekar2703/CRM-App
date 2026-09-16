@@ -18,6 +18,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDatePicker
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppNumberField
+import com.example.crm_app_kmp.ui.components.AppTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -47,11 +52,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.crm_app_kmp.expenses.ExpenseModel
 import com.example.crm_app_kmp.expenses.ExpenseRepository
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -60,6 +68,9 @@ import com.example.crm_app_kmp.ui.theme.TextPrimary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AndroidExpensesContent() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val supabaseClient = remember { com.example.crm_app_kmp.data.SupabaseAndroidClient(context) }
     val expenses = remember { mutableStateListOf(*ExpenseRepository.getExpenses().toTypedArray()) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -67,6 +78,11 @@ fun AndroidExpensesContent() {
     var editingExpense by remember { mutableStateOf<ExpenseModel?>(null) }
     var deletingExpense by remember { mutableStateOf<ExpenseModel?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    var userRole by remember { mutableStateOf("STAFF") }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        userRole = supabaseClient.getUserRole()
+    }
 
     val summary = remember(expenses.toList()) {
         ExpenseRepository.calculateSummary()
@@ -182,6 +198,7 @@ fun AndroidExpensesContent() {
                     items(filteredExpenses, key = { it.id }) { expense ->
                         ExpenseCard(
                             expense = expense,
+                            userRole = userRole,
                             onEdit = {
                                 editingExpense = expense
                                 showFormDialog = true
@@ -249,53 +266,25 @@ fun AndroidExpensesContent() {
 
     // DELETE DIALOG
     deletingExpense?.let { target ->
-        Dialog(onDismissRequest = { deletingExpense = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text("Delete Expense?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Delete expense entry for '${target.category}' (₹${target.amount})?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = { deletingExpense = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                ExpenseRepository.deleteExpense(target.id)
-                                expenses.removeAll { it.id == target.id }
-                                toastMsg = "Expense deleted."
-                                deletingExpense = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+        ThreeStepDeleteDialog(
+            itemName = "Expense: ${target.category}",
+            itemDetails = "Amount: ₹${target.amount} | Date: ${target.date}",
+            userRole = userRole,
+            onDismiss = { deletingExpense = null },
+            onConfirmDelete = {
+                ExpenseRepository.deleteExpense(target.id)
+                expenses.removeAll { it.id == target.id }
+                toastMsg = "Expense deleted."
+                deletingExpense = null
             }
-        }
+        )
     }
 }
 
 @Composable
 private fun ExpenseCard(
     expense: ExpenseModel,
+    userRole: String = "STAFF",
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -366,14 +355,16 @@ private fun ExpenseCard(
                         Text("Edit", fontSize = 12.sp)
                     }
 
-                    Button(
-                        onClick = onDelete,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = ErrorRed),
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Delete", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    if (userRole.equals("ADMIN", ignoreCase = true)) {
+                        Button(
+                            onClick = onDelete,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = ErrorRed),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Delete", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -394,9 +385,9 @@ private fun ExpenseFormDialog(
         description: String
     ) -> Unit
 ) {
-    var date by remember { mutableStateOf(editingExpense?.date ?: "29 Aug 2026") }
+    var date by remember { mutableStateOf(editingExpense?.date ?: "2026-08-29") }
     var category by remember { mutableStateOf(editingExpense?.category ?: "Rent") }
-    var amountStr by remember { mutableStateOf(editingExpense?.amount?.let { "$it" } ?: "") }
+    var amountStr by remember { mutableStateOf(editingExpense?.amount?.toInt()?.toString() ?: "") }
     var paymentMode by remember { mutableStateOf(editingExpense?.paymentMode ?: "Cash") }
     var paidTo by remember { mutableStateOf(editingExpense?.paidTo ?: "") }
     var description by remember { mutableStateOf(editingExpense?.description ?: "") }
@@ -413,7 +404,7 @@ private fun ExpenseFormDialog(
                     .fillMaxWidth()
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -435,75 +426,68 @@ private fun ExpenseFormDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedTextField(
+                AppDatePicker(
+                    label = "Expense Date",
                     value = date,
-                    onValueChange = { date = it },
-                    placeholder = { Text("Expense Date *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    onDateSelected = { date = it; errorMsg = null },
+                    required = true
                 )
 
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    placeholder = { Text("Category (Rent, Electricity...)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                AppDropdown(
+                    label = "Category",
+                    selectedValue = category,
+                    options = listOf("Rent", "Electricity", "Office Supplies", "Fuel", "Tea & Snacks", "Maintenance", "Salaries", "Other"),
+                    onSelect = { category = it; errorMsg = null },
+                    required = true
                 )
 
-                OutlinedTextField(
+                AppNumberField(
+                    label = "Amount (₹)",
                     value = amountStr,
-                    onValueChange = { amountStr = it },
-                    placeholder = { Text("Amount (₹) *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    onValueChange = { amountStr = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. 1200.00"
                 )
 
-                OutlinedTextField(
-                    value = paymentMode,
-                    onValueChange = { paymentMode = it },
-                    placeholder = { Text("Payment Mode (Cash, UPI, Card)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                AppDropdown(
+                    label = "Payment Mode",
+                    selectedValue = paymentMode,
+                    options = listOf("Cash", "UPI", "Bank Transfer", "Card", "Other"),
+                    onSelect = { paymentMode = it },
+                    required = true
                 )
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Paid To (Optional)",
                     value = paidTo,
                     onValueChange = { paidTo = it },
-                    placeholder = { Text("Paid To (Optional)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    placeholder = "e.g. Landlord / Electricity Board"
                 )
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Description (Optional)",
                     value = description,
                     onValueChange = { description = it },
-                    placeholder = { Text("Description (Optional)", fontSize = 13.sp) },
+                    singleLine = false,
                     minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    placeholder = "Enter expense details..."
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = if (editingExpense != null) "Save Changes" else "Save Expense",
                         onClick = {
                             val amt = amountStr.toDoubleOrNull()
                             if (date.isBlank()) {
@@ -515,12 +499,8 @@ private fun ExpenseFormDialog(
                             } else {
                                 onSave(date.trim(), category.trim(), amt, paymentMode.trim(), paidTo.trim(), description.trim())
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingExpense != null) "Save Changes" else "Save Expense", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }

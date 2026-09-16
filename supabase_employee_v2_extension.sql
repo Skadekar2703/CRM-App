@@ -20,9 +20,11 @@ ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS remark TEXT;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS active_days INT DEFAULT 0;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS salary NUMERIC(12, 2) DEFAULT 0.00;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS salary_type TEXT DEFAULT 'Monthly';
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS udhaar_balance NUMERIC(12, 2) DEFAULT 0.00;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS ctc_ytd NUMERIC(12, 2) DEFAULT 0.00;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS business_id UUID DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.businesses(id) ON DELETE CASCADE;
 
 -- 2. CREATE EMPLOYEE TRANSACTIONS TABLE (FINANCIAL & ACTIVITY RECORDS)
 CREATE TABLE IF NOT EXISTS public.employee_transactions (
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS public.employee_transactions (
     amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     date DATE NOT NULL DEFAULT CURRENT_DATE,
     note TEXT,
+    business_id UUID DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.businesses(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -62,4 +65,10 @@ CREATE POLICY "Allow authenticated update employee_transactions" ON public.emplo
 
 DROP POLICY IF EXISTS "Allow authenticated delete employee_transactions" ON public.employee_transactions;
 CREATE POLICY "Allow authenticated delete employee_transactions" ON public.employee_transactions FOR DELETE TO authenticated USING (true);
+
+-- 3. ENSURE STORAGE BUCKET 'customer_photos' EXISTS AND IS ACCESSIBLE
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('customer_photos', 'customer_photos', false)
+ON CONFLICT (id) DO NOTHING;
+
 

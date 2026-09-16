@@ -17,6 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDatePicker
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppNumberField
+import com.example.crm_app_kmp.ui.components.AppTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +68,7 @@ import com.example.crm_app_kmp.cheques.ChequeDateUtils
 import com.example.crm_app_kmp.cheques.ChequeModel
 import com.example.crm_app_kmp.data.SupabaseAndroidClient
 import com.example.crm_app_kmp.ui.components.CrmRootScaffold
+import com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog
 import com.example.crm_app_kmp.ui.theme.ErrorRed
 import com.example.crm_app_kmp.ui.theme.PrimaryBlue
 import com.example.crm_app_kmp.ui.theme.TextMuted
@@ -96,6 +104,7 @@ fun AndroidChequesContent() {
     var deletingCheque by remember { mutableStateOf<ChequeModel?>(null) }
     var statusActionTarget by remember { mutableStateOf<Pair<ChequeModel, String>?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    var userRole by remember { mutableStateOf("STAFF") }
 
     fun loadChequesFromSupabase() {
         scope.launch {
@@ -138,7 +147,8 @@ fun AndroidChequesContent() {
         }
     }
 
-    LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        userRole = supabaseClient.getUserRole()
         loadChequesFromSupabase()
     }
 
@@ -262,6 +272,7 @@ fun AndroidChequesContent() {
                     items(filteredCheques) { cheque ->
                         MobileChequeCard(
                             cheque = cheque,
+                            userRole = userRole,
                             onEdit = {
                                 editingCheque = cheque
                                 showFormDialog = true
@@ -417,54 +428,23 @@ fun AndroidChequesContent() {
 
     // DELETE CONFIRMATION DIALOG
     deletingCheque?.let { target ->
-        Dialog(onDismissRequest = { deletingCheque = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Cheque?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete cheque '${target.chequeNo}' (${target.partyName})?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = { deletingCheque = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val isUuid = target.id.length == 36 && target.id.contains("-")
-                                    if (isUuid) {
-                                        supabaseClient.deleteRecord("cheques", target.id)
-                                    }
-                                    chequesList.removeAll { it.id == target.id }
-                                    toastMsg = "Cheque '${target.chequeNo}' deleted."
-                                    deletingCheque = null
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
+        ThreeStepDeleteDialog(
+            itemName = "Cheque: ${target.chequeNo}",
+            itemDetails = "Party: ${target.partyName} | Amount: ₹${target.amount}",
+            userRole = userRole,
+            onDismiss = { deletingCheque = null },
+            onConfirmDelete = {
+                scope.launch {
+                    val isUuid = target.id.length == 36 && target.id.contains("-")
+                    if (isUuid) {
+                        supabaseClient.deleteRecord("cheques", target.id)
                     }
+                    chequesList.removeAll { it.id == target.id }
+                    toastMsg = "Cheque '${target.chequeNo}' deleted."
+                    deletingCheque = null
                 }
             }
-        }
+        )
     }
 }
 
@@ -488,6 +468,7 @@ private fun MetricChip(label: String, value: String, color: Color, modifier: Mod
 @Composable
 private fun MobileChequeCard(
     cheque: ChequeModel,
+    userRole: String = "STAFF",
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onClearStatus: () -> Unit,
@@ -587,17 +568,19 @@ private fun MobileChequeCard(
                         Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextPrimary, modifier = Modifier.size(15.dp))
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    if (userRole.equals("ADMIN", ignoreCase = true)) {
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFEF2F2))
-                            .clickable { onDelete() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(15.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFEF2F2))
+                                .clickable { onDelete() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(15.dp))
+                        }
                     }
                 }
             }
@@ -636,44 +619,16 @@ private fun ChequeFormDialog(
     onDismiss: () -> Unit,
     onSave: (no: String, party: String, bank: String, amt: Double, dir: String, issue: String, due: String, status: String, notes: String) -> Unit
 ) {
-    val context = LocalContext.current
-
     var chequeNo by remember { mutableStateOf(editingCheque?.chequeNo ?: "") }
     var partyName by remember { mutableStateOf(editingCheque?.partyName ?: "") }
     var bankName by remember { mutableStateOf(editingCheque?.bankName ?: "HDFC Bank") }
-    var amount by remember { mutableStateOf(editingCheque?.amount?.toString() ?: "45000") }
+    var amount by remember { mutableStateOf(editingCheque?.amount?.toInt()?.toString() ?: "45000") }
     var direction by remember { mutableStateOf(editingCheque?.direction ?: "Inward") }
-    var issueDateDisplay by remember { mutableStateOf(editingCheque?.issueDate?.ifBlank { "05 Sep 2026" } ?: "05 Sep 2026") }
-    var dueDateDisplay by remember { mutableStateOf(editingCheque?.dueDate?.ifBlank { "05 Sep 2026" } ?: "05 Sep 2026") }
+    var issueDateDisplay by remember { mutableStateOf(editingCheque?.issueDate?.ifBlank { "2026-09-05" } ?: "2026-09-05") }
+    var dueDateDisplay by remember { mutableStateOf(editingCheque?.dueDate?.ifBlank { "2026-09-05" } ?: "2026-09-05") }
     var status by remember { mutableStateOf(editingCheque?.status ?: "Pending") }
     var notes by remember { mutableStateOf(editingCheque?.notes ?: "") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
-
-    fun openDatePicker(initialDisplay: String, onSelected: (String) -> Unit) {
-        val calendar = Calendar.getInstance()
-        val iso = ChequeDateUtils.parseDisplayToIso(initialDisplay)
-        val parts = iso.split("-")
-        if (parts.size == 3) {
-            val y = parts[0].toIntOrNull()
-            val m = parts[1].toIntOrNull()?.minus(1)
-            val d = parts[2].toIntOrNull()
-            if (y != null && m != null && d != null) {
-                calendar.set(y, m, d)
-            }
-        }
-        val y = calendar.get(Calendar.YEAR)
-        val m = calendar.get(Calendar.MONTH)
-        val d = calendar.get(Calendar.DAY_OF_MONTH)
-
-        DatePickerDialog(context, { _, selectedYear, selectedMonth, selectedDay ->
-            val monthStr = String.format("%02d", selectedMonth + 1)
-            val dayStr = String.format("%02d", selectedDay)
-            val isoStr = "$selectedYear-$monthStr-$dayStr"
-            val formatted = ChequeDateUtils.formatToDisplayDate(isoStr)
-            onSelected(formatted)
-            errorMsg = null
-        }, y, m, d).show()
-    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -684,8 +639,9 @@ private fun ChequeFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -707,116 +663,93 @@ private fun ChequeFormDialog(
                     Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Party / Company Name",
                     value = partyName,
-                    onValueChange = { partyName = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Party / Company Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    onValueChange = { partyName = it; errorMsg = null },
+                    required = true,
+                    placeholder = "e.g. Acme Corp"
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = chequeNo,
-                        onValueChange = { chequeNo = it },
-                        placeholder = { Text("Cheque Ref No", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = amount,
-                        onValueChange = { amount = it; if (errorMsg != null) errorMsg = null },
-                        placeholder = { Text("Amount (₹) *", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                AppTextField(
+                    label = "Cheque Number",
+                    value = chequeNo,
+                    onValueChange = { chequeNo = it },
+                    placeholder = "e.g. CHQ-2023-0891"
+                )
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Bank Name",
                     value = bankName,
                     onValueChange = { bankName = it },
-                    placeholder = { Text("Bank Name", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    placeholder = "e.g. HDFC Bank or ICICI Bank"
                 )
 
-                // DATE PICKER FIELDS ROW
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // ISSUE DATE PICKER
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(10.dp))
-                            .clickable { openDatePicker(issueDateDisplay) { issueDateDisplay = it } }
-                            .padding(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(issueDateDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Icon(Icons.Default.DateRange, contentDescription = "Pick Issue Date", tint = PrimaryBlue, modifier = Modifier.size(18.dp))
-                        }
-                    }
+                AppNumberField(
+                    label = "Amount (₹)",
+                    value = amount,
+                    onValueChange = { amount = it; errorMsg = null },
+                    required = true,
+                    placeholder = "45000.00"
+                )
 
-                    // DUE DATE PICKER
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(10.dp))
-                            .clickable { openDatePicker(dueDateDisplay) { dueDateDisplay = it } }
-                            .padding(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(dueDateDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Icon(Icons.Default.DateRange, contentDescription = "Pick Due Date", tint = PrimaryBlue, modifier = Modifier.size(18.dp))
-                        }
+                AppDropdown(
+                    label = "Direction",
+                    selectedValue = if (direction == "Inward") "Inward (Received)" else "Outward (Issued)",
+                    options = listOf("Inward (Received)", "Outward (Issued)"),
+                    onSelect = { sel ->
+                        direction = if (sel.startsWith("Inward")) "Inward" else "Outward"
                     }
-                }
+                )
 
-                Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    listOf("Pending", "Cleared", "Bounced").forEach { st ->
-                        RadioButton(
-                            selected = status == st,
-                            onClick = { status = st },
-                            colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                        )
-                        Text(st, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                }
+                AppDropdown(
+                    label = "Status",
+                    selectedValue = status,
+                    options = listOf("Pending", "Cleared", "Bounced"),
+                    onSelect = { status = it }
+                )
+
+                AppDatePicker(
+                    label = "Issue Date",
+                    value = issueDateDisplay,
+                    onDateSelected = { issueDateDisplay = it; errorMsg = null },
+                    required = true
+                )
+
+                AppDatePicker(
+                    label = "Due Date",
+                    value = dueDateDisplay,
+                    onDateSelected = { dueDateDisplay = it; errorMsg = null }
+                )
+
+                AppTextField(
+                    label = "Notes / Reference",
+                    value = notes,
+                    onValueChange = { notes = it },
+                    placeholder = "e.g. Client payment for Invoice #1024"
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    AppFormButton(
+                        text = "Cancel",
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
+                        isSecondary = true
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
+                    AppFormButton(
+                        text = if (editingCheque != null) "Save Changes" else "Add Cheque",
                         onClick = {
                             val amtNum = amount.toDoubleOrNull()
-                            if (partyName.isBlank() || amtNum == null || amtNum <= 0) {
-                                errorMsg = "Party Name and valid Amount are required."
+                            if (partyName.isBlank()) {
+                                errorMsg = "Party Name is required."
+                            } else if (amtNum == null || amtNum <= 0) {
+                                errorMsg = "Please enter a valid amount."
                             } else if (issueDateDisplay.isBlank()) {
                                 errorMsg = "Issue Date is required."
                             } else if (!ChequeDateUtils.isDueDateValid(issueDateDisplay, dueDateDisplay)) {
@@ -824,12 +757,8 @@ private fun ChequeFormDialog(
                             } else {
                                 onSave(chequeNo.trim(), partyName.trim(), bankName.trim(), amtNum, direction, issueDateDisplay.trim(), dueDateDisplay.trim(), status, notes.trim())
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingCheque != null) "Save Changes" else "Add Cheque", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    )
                 }
             }
         }

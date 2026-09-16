@@ -33,6 +33,9 @@ struct IOSDaagContentView: View {
     private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255) }
 
     @State private var movements: [IOSStockMovementItem] = []
+    @State private var availableItems: [String] = []
+    @State private var availableSuppliers: [String] = []
+    @State private var availableTransports: [String] = []
 
     @State private var searchQuery = ""
     @State private var selectedFilterChip = "All Movements" // "All Movements", "Received", "Dispatched"
@@ -63,6 +66,25 @@ struct IOSDaagContentView: View {
                 case .failure:
                     self.movements = []
                 }
+            }
+        }
+
+        SupabaseIOSClient.shared.fetchTable(table: "items") { result in
+            if case .success(let itemsData) = result {
+                let names = itemsData.compactMap { $0["name"] as? String ?? $0["item_name"] as? String }
+                DispatchQueue.main.async { self.availableItems = names }
+            }
+        }
+        SupabaseIOSClient.shared.fetchTable(table: "suppliers") { result in
+            if case .success(let suppData) = result {
+                let names = suppData.compactMap { $0["name"] as? String ?? $0["supplier_name"] as? String }
+                DispatchQueue.main.async { self.availableSuppliers = names }
+            }
+        }
+        SupabaseIOSClient.shared.fetchTable(table: "transports") { result in
+            if case .success(let transData) = result {
+                let names = transData.compactMap { $0["name"] as? String ?? $0["transport_name"] as? String }
+                DispatchQueue.main.async { self.availableTransports = names }
             }
         }
     }
@@ -249,6 +271,9 @@ struct IOSDaagContentView: View {
         .sheet(isPresented: $showFormSheet) {
             IOSMovementFormSheet(
                 movement: editingMovement,
+                availableItems: availableItems,
+                availableSuppliers: availableSuppliers,
+                availableTransports: availableTransports,
                 onSave: { direction, item, quantity, amount, supplier, transport, status, date in
                     let payload: [String: Any] = [
                         "direction": direction,
@@ -403,12 +428,12 @@ struct IOSStockMovementCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil")
                             Text("Edit")
-                        Image(systemName: "pencil")
-                            .font(.caption)
-                            .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
-                            .padding(6)
-                            .background(Color(red: 241/255, green: 245/255, blue: 249/255))
-                            .cornerRadius(6)
+                        }
+                        .font(.caption)
+                        .foregroundColor(Color(red: 30/255, green: 41/255, blue: 59/255))
+                        .padding(6)
+                        .background(Color(red: 241/255, green: 245/255, blue: 249/255))
+                        .cornerRadius(6)
                     }
 
                     Button(action: onDelete) {
@@ -431,6 +456,9 @@ struct IOSStockMovementCard: View {
 
 struct IOSMovementFormSheet: View {
     var movement: IOSStockMovementItem?
+    var availableItems: [String] = []
+    var availableSuppliers: [String] = []
+    var availableTransports: [String] = []
     var onSave: (String, String, String, Double, String, String, String, String) -> Void
 
     @Environment(\.presentationMode) var presentationMode
@@ -455,12 +483,40 @@ struct IOSMovementFormSheet: View {
                 }
 
                 Section(header: Text("Movement Details")) {
+                    if !availableItems.isEmpty {
+                        Picker("Select Item", selection: $item) {
+                            Text("-- Select Existing Item --").tag("")
+                            ForEach(availableItems, id: \.self) { itemOption in
+                                Text(itemOption).tag(itemOption)
+                            }
+                        }
+                    }
                     TextField("Item Name *", text: $item)
+
                     TextField("Quantity (e.g. 2 bora)", text: $quantity)
                     TextField("Amount (₹)", text: $amount)
                         .keyboardType(.numberPad)
+
+                    if !availableSuppliers.isEmpty {
+                        Picker("Select Supplier", selection: $supplier) {
+                            Text("-- Select Existing Supplier --").tag("")
+                            ForEach(availableSuppliers, id: \.self) { sOption in
+                                Text(sOption).tag(sOption)
+                            }
+                        }
+                    }
                     TextField("Supplier (Optional)", text: $supplier)
+
+                    if !availableTransports.isEmpty {
+                        Picker("Select Transport", selection: $transport) {
+                            Text("-- Select Existing Transport --").tag("")
+                            ForEach(availableTransports, id: \.self) { tOption in
+                                Text(tOption).tag(tOption)
+                            }
+                        }
+                    }
                     TextField("Transport (Optional)", text: $transport)
+
                     TextField("Date", text: $date)
                 }
 

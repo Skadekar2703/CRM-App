@@ -41,6 +41,7 @@ struct IOSChequesContentView: View {
     @State private var editingCheque: ChequeIOSItem? = nil
     @State private var deletingCheque: ChequeIOSItem? = nil
     @State private var statusActionTarget: (cheque: ChequeIOSItem, nextStatus: String)? = nil
+    @State private var userRole: String = "STAFF"
 
     private var textPrimary: Color { isDarkMode ? Color.white : Color(red: 30/255, green: 41/255, blue: 59/255) }
     private var textMuted: Color { isDarkMode ? Color(red: 156/255, green: 163/255, blue: 175/255) : Color(red: 100/255, green: 116/255, blue: 139/255) }
@@ -132,12 +133,15 @@ struct IOSChequesContentView: View {
                             ForEach(filteredCheques) { cheque in
                                 IOSChequeCard(
                                     cheque: cheque,
+                                    userRole: userRole,
                                     onEdit: {
                                         editingCheque = cheque
                                         showFormSheet = true
                                     },
                                     onDelete: {
-                                        deletingCheque = cheque
+                                        if userRole == "ADMIN" {
+                                            deletingCheque = cheque
+                                        }
                                     },
                                     onClearStatus: {
                                         statusActionTarget = (cheque, "Cleared")
@@ -184,14 +188,14 @@ struct IOSChequesContentView: View {
                 }
             )
         }
-        .alert(item: $deletingCheque) { target in
-            Alert(
-                title: Text("Delete Cheque?"),
-                message: Text("Are you sure you want to delete cheque '\(target.chequeNo)' (\(target.partyName))?"),
-                primaryButton: .destructive(Text("Delete")) {
+        .sheet(item: $deletingCheque) { target in
+            IOSThreeStepDeleteSheet(
+                itemName: "Cheque: \(target.chequeNo)",
+                itemDetails: "Party: \(target.partyName) | Amount: ₹\(Int(target.amount))",
+                userRole: userRole,
+                onConfirmDelete: {
                     cheques.removeAll { $0.id == target.id }
-                },
-                secondaryButton: .cancel()
+                }
             )
         }
         .alert(isPresented: Binding<Bool>(
@@ -240,6 +244,7 @@ struct IOSMetricCard: View {
 
 struct IOSChequeCard: View {
     let cheque: ChequeIOSItem
+    var userRole: String = "STAFF"
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onClearStatus: () -> Void
@@ -298,13 +303,15 @@ struct IOSChequeCard: View {
                             .background(primaryBlue.opacity(0.1))
                             .clipShape(Circle())
                     }
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                            .foregroundColor(errorRed)
-                            .frame(width: 30, height: 30)
-                            .background(Color(red: 254/255, green: 242/255, blue: 242/255))
-                            .clipShape(Circle())
+                    if userRole.uppercased() == "ADMIN" {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundColor(errorRed)
+                                .frame(width: 30, height: 30)
+                                .background(Color(red: 254/255, green: 242/255, blue: 242/255))
+                                .clipShape(Circle())
+                        }
                     }
                 }
             }

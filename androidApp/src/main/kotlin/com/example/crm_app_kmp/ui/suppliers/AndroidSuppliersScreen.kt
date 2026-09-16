@@ -2,6 +2,7 @@ package com.example.crm_app_kmp.ui.suppliers
 
 import android.content.Intent
 import android.net.Uri
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,6 +76,8 @@ import com.example.crm_app_kmp.ui.theme.TextPrimary
 @Composable
 fun AndroidSuppliersContent() {
     val context = LocalContext.current
+    val supabaseClient = remember { com.example.crm_app_kmp.data.SupabaseAndroidClient(context) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val suppliers = remember { mutableStateListOf(*SupplierRepository.getSuppliers().toTypedArray()) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -85,6 +88,37 @@ fun AndroidSuppliersContent() {
     var editingSupplier by remember { mutableStateOf<SupplierModel?>(null) }
     var deletingSupplier by remember { mutableStateOf<SupplierModel?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+
+    fun refreshSuppliers() {
+        scope.launch {
+            val res = supabaseClient.fetchTable("suppliers")
+            res.onSuccess { array ->
+                if (array.length() > 0) {
+                    suppliers.clear()
+                    for (i in 0 until array.length()) {
+                        val obj = array.getJSONObject(i)
+                        suppliers.add(
+                            SupplierModel(
+                                id = obj.optString("id", "SUP-00${i + 1}"),
+                                partyName = obj.optString("name", obj.optString("party_name", "Supplier")),
+                                contactPerson = obj.optString("company", obj.optString("contact_person", "")),
+                                mobile = obj.optString("phone", obj.optString("mobile", "")),
+                                email = obj.optString("email", ""),
+                                address = obj.optString("area", obj.optString("address", "")),
+                                paymentTerms = obj.optString("payment_terms", "Net 30 Days"),
+                                photoUrl = obj.optString("photo_url", obj.optString("photo", "")),
+                                status = obj.optString("status", "Active")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        refreshSuppliers()
+    }
 
     val filteredSuppliers = suppliers.filter { s ->
         val q = searchQuery.lowercase().trim()
@@ -304,84 +338,52 @@ fun AndroidSuppliersContent() {
             editingSupplier = editingSupplier,
             onDismiss = { showFormDialog = false },
             onSave = { partyName, contactPerson, mobile, email, address, status ->
-                if (editingSupplier != null) {
-                    val updated = SupplierRepository.updateSupplier(
-                        id = editingSupplier!!.id,
-                        partyName = partyName,
-                        contactPerson = contactPerson,
-                        mobile = mobile,
-                        email = email,
-                        address = address,
-                        status = status
-                    )
-                    if (updated != null) {
-                        val idx = suppliers.indexOfFirst { it.id == editingSupplier!!.id }
-                        if (idx >= 0) suppliers[idx] = updated
+                val jsonPayload = org.json.JSONObject().apply {
+                    put("name", partyName)
+                    put("company", contactPerson)
+                    put("phone", mobile)
+                    put("email", email)
+                    put("area", address)
+                    put("status", status)
+                }
+                scope.launch {
+                    if (editingSupplier != null) {
+                        val targetId = editingSupplier!!.id
+                        val isUuid = targetId.matches(Regex("^[0-9a-fA-F-]{36}$"))
+                        if (isUuid) {
+                            supabaseClient.updateRecord("suppliers", targetId, jsonPayload)
+                        }
                         toastMsg = "Supplier '$partyName' updated."
+                    } else {
+                        supabaseClient.insertRecord("suppliers", jsonPayload)
+                        toastMsg = "New supplier '$partyName' added."
                     }
-                } else {
-                    val newS = SupplierRepository.addSupplier(
-                        partyName = partyName,
-                        contactPerson = contactPerson,
-                        mobile = mobile,
-                        email = email,
-                        address = address,
-                        status = status
-                    )
-                    suppliers.add(0, newS)
-                    toastMsg = "New supplier '$partyName' added."
+                    refreshSuppliers()
                 }
                 showFormDialog = false
             }
         )
     }
 
-    // DELETE CONFIRMATION DIALOG
+    // ADMIN 3-STEP DELETE CONFIRMATION DIALOG
     deletingSupplier?.let { target ->
-        Dialog(onDismissRequest = { deletingSupplier = null }) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("Delete Supplier?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Are you sure you want to delete '${target.partyName}'?", fontSize = 14.sp, color = TextMuted)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { deletingSupplier = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel", fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                SupplierRepository.deleteSupplier(target.id)
-                                suppliers.removeAll { it.id == target.id }
-                                toastMsg = "Supplier '${target.partyName}' deleted."
-                                deletingSupplier = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
+        com.example.crm_app_kmp.ui.components.ThreeStepDeleteDialog(
+            itemName = target.partyName,
+            itemDetails = "ID: ${target.id}, Phone: ${target.mobile}",
+            userRole = "ADMIN",
+            onDismiss = { deletingSupplier = null },
+            onConfirmDelete = {
+                val isUuid = target.id.matches(Regex("^[0-9a-fA-F-]{36}$"))
+                scope.launch {
+                    if (isUuid) {
+                        supabaseClient.deleteRecord("suppliers", target.id)
                     }
+                    suppliers.removeAll { it.id == target.id }
+                    toastMsg = "Supplier '${target.partyName}' deleted."
+                    deletingSupplier = null
                 }
             }
-        }
+        )
     }
 }
 
@@ -552,6 +554,7 @@ private fun SupplierFormDialog(
     var contactPerson by remember { mutableStateOf(editingSupplier?.contactPerson ?: "") }
     var mobile by remember { mutableStateOf(editingSupplier?.mobile ?: "") }
     var email by remember { mutableStateOf(editingSupplier?.email ?: "") }
+    var paymentTerms by remember { mutableStateOf("Net 30 Days") }
     var address by remember { mutableStateOf(editingSupplier?.address ?: "") }
     var status by remember { mutableStateOf(editingSupplier?.status ?: "Active") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
@@ -565,9 +568,8 @@ private fun SupplierFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -586,110 +588,113 @@ private fun SupplierFormDialog(
                 }
 
                 errorMsg?.let { err ->
-                    Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedTextField(
-                    value = partyName,
-                    onValueChange = { partyName = it; if (errorMsg != null) errorMsg = null },
-                    placeholder = { Text("Supplier / Party Name *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = contactPerson,
-                        onValueChange = { contactPerson = it },
-                        placeholder = { Text("Contact Person", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = mobile,
-                        onValueChange = { mobile = it },
-                        placeholder = { Text("Mobile Number", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    placeholder = { Text("Email Address", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    placeholder = { Text("Address / Location", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Text("Status", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = status == "Active",
-                        onClick = { status = "Active" },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
-                    )
-                    Text("Active", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    RadioButton(
-                        selected = status == "Inactive",
-                        onClick = { status = "Inactive" },
-                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF64748B))
-                    )
-                    Text("Inactive", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Cancel", fontSize = 13.sp)
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
                     }
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            if (partyName.isBlank()) {
-                                errorMsg = "Supplier / Party Name is required."
-                            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = partyName,
+                            onValueChange = { partyName = it; errorMsg = null },
+                            label = "Supplier / Party Name",
+                            placeholder = "e.g. Acme Global Supplies",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppTextField(
+                                    value = contactPerson,
+                                    onValueChange = { contactPerson = it },
+                                    label = "Contact Person",
+                                    placeholder = "Jane Doe"
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppPhoneField(
+                                    value = mobile,
+                                    onValueChange = { mobile = it },
+                                    label = "Mobile Number",
+                                    placeholder = "9876543210"
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppEmailField(
+                                    value = email,
+                                    onValueChange = { email = it },
+                                    label = "Email Address",
+                                    placeholder = "jane@acme.com"
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = paymentTerms,
+                                    onValueChange = { paymentTerms = it },
+                                    label = "Payment Terms",
+                                    options = listOf("Net 15 Days", "Net 30 Days", "Net 45 Days", "Advance / Cash")
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = address,
+                            onValueChange = { address = it },
+                            label = "Address / Facility Location",
+                            placeholder = "Industrial Area, Phase 2"
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppDropdown(
+                            value = status,
+                            onValueChange = { status = it },
+                            label = "Status",
+                            options = listOf("Active", "Inactive"),
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = if (editingSupplier != null) "Save Changes" else "Add Supplier",
+                            onClick = {
+                                if (partyName.isBlank()) {
+                                    errorMsg = "Party / Supplier Name is required"
+                                    return@AppFormButton
+                                }
                                 onSave(
                                     partyName.trim(),
-                                    contactPerson.trim(),
+                                    contactPerson.trim().ifEmpty { "Contact Person" },
                                     mobile.trim(),
                                     email.trim(),
                                     address.trim(),
                                     status
                                 )
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (editingSupplier != null) "Save Changes" else "Add Supplier", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        )
                     }
                 }
             }
         }
     }
 }
+

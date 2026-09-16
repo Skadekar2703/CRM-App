@@ -28,12 +28,14 @@ export const WebProfitLossScreen: React.FC = () => {
   const [reportData, setReportData] = useState<WebProfitLossReport>({
     fromDate: getFirstOfMonthISO(),
     toDate: getTodayISO(),
+    udhaari: 0,
+    jama: 0,
+    salaries: 0,
+    netProfit: 0,
     revenue: 0,
     purchases: 0,
     expenses: 0,
-    salaries: 0,
     expensesPlusSalaries: 0,
-    netProfit: 0,
     isLoss: false,
     statementItems: [],
     breakdown: { purchases: 0, expenses: 0, salaries: 0, netProfit: 0 }
@@ -52,17 +54,19 @@ export const WebProfitLossScreen: React.FC = () => {
 
       // 1. REVENUE (from sales table)
       let revenueSum = 0;
-      const { data: salesData } = await supabase
+      const { data: salesData, error: salesErr } = await supabase
         .from('sales')
         .select('*');
 
+      if (salesErr) console.error('Error fetching sales:', salesErr);
       if (salesData && salesData.length > 0) {
         salesData.forEach((s: any) => {
-          const dtStr = s.created_at || s.sale_date || s.date;
+          if (s.status && s.status.toLowerCase() === 'cancelled') return;
+          const dtStr = s.sale_date || s.date || s.created_at;
           if (dtStr) {
             const tMs = new Date(dtStr).getTime();
             if (tMs >= startMs && tMs <= endMs) {
-              const amt = parseFloat(s.grand_total || s.total_amount || s.subtotal || 0);
+              const amt = parseFloat(s.total || s.grand_total || s.total_amount || s.subtotal || 0);
               revenueSum += isNaN(amt) ? 0 : amt;
             }
           }
@@ -71,14 +75,15 @@ export const WebProfitLossScreen: React.FC = () => {
 
       // 2. PURCHASES / COST (from supplier_ledger table)
       let purchasesSum = 0;
-      const { data: ledgerData } = await supabase
+      const { data: ledgerData, error: ledgerErr } = await supabase
         .from('supplier_ledger')
         .select('*');
 
+      if (ledgerErr) console.error('Error fetching supplier_ledger:', ledgerErr);
       if (ledgerData && ledgerData.length > 0) {
         ledgerData.forEach((item: any) => {
           const type = (item.transaction_type || item.type || '').toLowerCase();
-          if (type === 'purchase' || type === 'bill') {
+          if (type === 'purchase' || type === 'bill' || type === 'debit') {
             const dtStr = item.date || item.created_at;
             if (dtStr) {
               const tMs = new Date(dtStr).getTime();
@@ -91,18 +96,19 @@ export const WebProfitLossScreen: React.FC = () => {
         });
       }
 
-      // 3. OPERATING EXPENSES (from expenses table, excluding Salary/Labour if recorded separately)
+      // 3. OPERATING EXPENSES (from expenses table, excluding Salary/Labour)
       let expensesSum = 0;
-      const { data: expData } = await supabase
+      const { data: expData, error: expErr } = await supabase
         .from('expenses')
         .select('*');
 
+      if (expErr) console.error('Error fetching expenses:', expErr);
       if (expData && expData.length > 0) {
         expData.forEach((item: any) => {
           const cat = (item.category || '').toLowerCase();
           // Exclude Salary category from general expenses to prevent double-counting with employee_transactions
           if (!cat.includes('salary') && !cat.includes('labour') && !cat.includes('labor')) {
-            const dtStr = item.date || item.created_at;
+            const dtStr = item.expense_date || item.date || item.created_at;
             if (dtStr) {
               const tMs = new Date(dtStr).getTime();
               if (tMs >= startMs && tMs <= endMs) {
@@ -114,16 +120,51 @@ export const WebProfitLossScreen: React.FC = () => {
         });
       }
 
-      // 4. EMPLOYEE / LABOUR COSTS (from employee_transactions table)
+      // 4. EMPLOYEE / LABOUR COSTS (from employees & employee_transactions tables)
       let salariesSum = 0;
-      const { data: empTxData } = await supabase
+
+      // 4A. Attributable recurring employee salary for active days in reporting period
+      const { data: empData, error: empListErr } = await supabase
+        .from('employees')
+        .select('*');
+
+      if (empListErr) console.error('Error fetching employees for P&L:', empListErr);
+      if (empData && empData.length > 0) {
+        empData.forEach((emp: any) => {
+          const status = emp.status || 'Active';
+          if (status.toLowerCase() === 'inactive' && !emp.left_on) return;
+
+          const joinedOn = emp.joined_on ? emp.joined_on.substring(0, 10) : startISO;
+          const leftOn = emp.left_on ? emp.left_on.substring(0, 10) : null;
+
+          const overlapStart = joinedOn > startISO ? joinedOn : startISO;
+          const overlapEnd = leftOn && leftOn < endISO ? leftOn : endISO;
+
+          if (overlapStart <= overlapEnd) {
+            const sDate = new Date(`${overlapStart}T00:00:00`);
+            const eDate = new Date(`${overlapEnd}T00:00:00`);
+            const days = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            if (days > 0) {
+              const salary = parseFloat(emp.salary || 0);
+              const isMonthly = (emp.salary_type || 'Monthly').toLowerCase() === 'monthly';
+              const cost = isMonthly ? (salary / 30.0) * days : salary * days;
+              salariesSum += isNaN(cost) ? 0 : cost;
+            }
+          }
+        });
+      }
+
+      // 4B. One-off bonuses, gifts, and extra labour expenses from employee_transactions
+      const { data: empTxData, error: empErr } = await supabase
         .from('employee_transactions')
         .select('*');
 
+      if (empErr) console.error('Error fetching employee_transactions:', empErr);
       if (empTxData && empTxData.length > 0) {
         empTxData.forEach((item: any) => {
           const type = (item.type || '').toLowerCase();
-          if (type.includes('salary') || type.includes('bonus') || type.includes('gift')) {
+          // Add one-off bonuses, gifts, and labour expenses
+          if (type.includes('bonus') || type.includes('gift') || type.includes('labour') || type.includes('labor') || type.includes('extra')) {
             const dtStr = item.date || item.created_at;
             if (dtStr) {
               const tMs = new Date(dtStr).getTime();
@@ -136,7 +177,34 @@ export const WebProfitLossScreen: React.FC = () => {
         });
       }
 
-      // CALCULATE TOTALS & PROFIT/LOSS
+      // 5. UDHAARI & JAMA (from udhaari table)
+      let udhaariSum = 0;
+      let jamaSum = 0;
+      const { data: udhaariData, error: udhaariErr } = await supabase
+        .from('udhaari')
+        .select('*');
+
+      if (udhaariErr) console.error('Error fetching udhaari:', udhaariErr);
+      if (udhaariData && udhaariData.length > 0) {
+        udhaariData.forEach((item: any) => {
+          const dtStr = item.date || item.created_at;
+          if (dtStr) {
+            const tMs = new Date(dtStr).getTime();
+            if (tMs >= startMs && tMs <= endMs) {
+              const type = (item.type || '').toLowerCase();
+              const amt = parseFloat(item.amount || 0);
+              const val = isNaN(amt) ? 0 : amt;
+              if (type === 'baki' || type === 'udhaar' || type === 'debit' || type.includes('baki') || type.includes('udhaar')) {
+                udhaariSum += val;
+              } else if (type === 'jama' || type === 'payment' || type === 'credit' || type.includes('jama') || type.includes('payment')) {
+                jamaSum += val;
+              }
+            }
+          }
+        });
+      }
+
+      // CALCULATE TOTALS & PROFIT/LOSS (Shared Formula)
       const expensesPlusSalaries = expensesSum + salariesSum;
       const netProfit = revenueSum - purchasesSum - expensesSum - salariesSum;
       const isLoss = netProfit < 0;
@@ -157,12 +225,14 @@ export const WebProfitLossScreen: React.FC = () => {
       setReportData({
         fromDate: startISO,
         toDate: endISO,
+        udhaari: udhaariSum,
+        jama: jamaSum,
+        salaries: salariesSum,
+        netProfit,
         revenue: revenueSum,
         purchases: purchasesSum,
         expenses: expensesSum,
-        salaries: salariesSum,
         expensesPlusSalaries,
-        netProfit,
         isLoss,
         statementItems,
         breakdown: {
@@ -337,30 +407,30 @@ export const WebProfitLossScreen: React.FC = () => {
 
         {/* FOUR SUMMARY CARDS */}
         <div className="udhaari-summary-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          {/* CARD 1: REVENUE */}
+          {/* CARD 1: UDHAARI */}
           <div className="udhaari-card-box">
-            <div className="udhaari-stat-label">REVENUE (SALES)</div>
-            <div className="udhaari-stat-value text-blue">{formatINR(reportData.revenue)}</div>
+            <div className="udhaari-stat-label">UDHAARI</div>
+            <div className="udhaari-stat-value text-red">{formatINR(reportData.udhaari)}</div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 500 }}>
-              Historical sales for period
+              Customer credit / Baki
             </div>
           </div>
 
-          {/* CARD 2: PURCHASES */}
+          {/* CARD 2: JAMA */}
           <div className="udhaari-card-box">
-            <div className="udhaari-stat-label">PURCHASES / COST</div>
-            <div className="udhaari-stat-value text-amber">{formatINR(reportData.purchases)}</div>
+            <div className="udhaari-stat-label">JAMA</div>
+            <div className="udhaari-stat-value text-green">{formatINR(reportData.jama)}</div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 500 }}>
-              Supplier ledger purchases
+              Payments received
             </div>
           </div>
 
-          {/* CARD 3: EXPENSES + SALARIES */}
+          {/* CARD 3: SALARIES */}
           <div className="udhaari-card-box">
-            <div className="udhaari-stat-label">OPERATING &amp; LABOUR COSTS</div>
-            <div className="udhaari-stat-value text-red">{formatINR(reportData.expensesPlusSalaries)}</div>
+            <div className="udhaari-stat-label">SALARIES</div>
+            <div className="udhaari-stat-value text-amber">{formatINR(reportData.salaries)}</div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 500 }}>
-              {formatINR(reportData.expenses)} exp + {formatINR(reportData.salaries)} staff
+              Employee / labour cost
             </div>
           </div>
 

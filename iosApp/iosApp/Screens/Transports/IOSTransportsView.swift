@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct IOSTransportsView: View {
+    var userRole: String = "ADMIN"
     var onNavigateSection: (String) -> Void = { _ in }
 
     var body: some View {
@@ -8,12 +9,14 @@ struct IOSTransportsView: View {
             activeSection: "Transports",
             onNavigateSection: onNavigateSection
         ) {
-            IOSTransportsContentView()
+            IOSTransportsContentView(userRole: userRole)
         }
     }
 }
 
 struct IOSTransportsContentView: View {
+    var userRole: String = "ADMIN"
+
     @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
     private var bgApp: Color {
@@ -29,20 +32,44 @@ struct IOSTransportsContentView: View {
         isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
     }
 
-    @State private var transports: [IOSTransport] = [
-        IOSTransport(id: "1042", transportName: "Alpha Logistics Pvt Ltd", mobile: "+1 (555) 123-4567", contactPerson: "John Doe", vehicleNumber: "Fleet: 12 Vehicles", status: "Active", createdDate: "Oct 24, 2023"),
-        IOSTransport(id: "1043", transportName: "Express Cargo Co.", mobile: "+1 (555) 987-6543", contactPerson: "Sarah Smith", vehicleNumber: "Fleet: 5 Vehicles", status: "Inactive", createdDate: "Oct 25, 2023"),
-        IOSTransport(id: "1044", transportName: "Global Transit", mobile: "+1 (555) 456-7890", contactPerson: "Mike Johnson", vehicleNumber: "Fleet: 28 Vehicles", status: "Active", createdDate: "Nov 02, 2023"),
-        IOSTransport(id: "1045", transportName: "BlueDart Express Ltd", mobile: "+91 98111 22334", contactPerson: "Vikram Singh", vehicleNumber: "KA 02 EF 5678", status: "Active", createdDate: "Nov 15, 2023"),
-        IOSTransport(id: "1046", transportName: "VRL Logistics Services", mobile: "+91 94444 55555", contactPerson: "Ramesh Patil", vehicleNumber: "KA 25 M 9900", status: "Active", createdDate: "Nov 20, 2023")
-    ]
-
+    @State private var transports: [IOSTransport] = []
     @State private var searchQuery = ""
     @State private var showFormSheet = false
     @State private var editingTransport: IOSTransport? = nil
     @State private var deleteTargetTransport: IOSTransport? = nil
-    @State private var showDeleteAlert = false
+    @State private var showDeleteSheet = false
     @State private var toastMsg: String? = nil
+    @State private var isLoading = true
+
+    private var isAdmin: Bool {
+        userRole.caseInsensitiveCompare("ADMIN") == .orderedSame
+    }
+
+    func fetchTransportsFromSupabase() {
+        isLoading = true
+        SupabaseIOSClient.shared.fetchTable(table: "transports") { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                switch result {
+                case .success(let items):
+                    self.transports = items.map { dict in
+                        IOSTransport(
+                            id: "\(dict["id"] ?? UUID().uuidString)",
+                            transportName: dict["name"] as? String ?? dict["transportName"] as? String ?? "Transport",
+                            mobile: dict["phone"] as? String ?? dict["mobile"] as? String ?? "",
+                            contactPerson: dict["driver_name"] as? String ?? dict["contactPerson"] as? String ?? "Driver",
+                            vehicleNumber: dict["vehicle_number"] as? String ?? dict["vehicleNumber"] as? String ?? "N/A",
+                            status: dict["status"] as? String ?? "Active",
+                            createdDate: "Active"
+                        )
+                    }
+                case .failure(let err):
+                    print("Fetch transports error:", err)
+                    self.transports = []
+                }
+            }
+        }
+    }
 
     var filteredTransports: [IOSTransport] {
         transports.filter { t in
@@ -63,15 +90,33 @@ struct IOSTransportsContentView: View {
                         .fontWeight(.bold)
                         .foregroundColor(textPrimary)
 
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(textMuted)
-                        TextField("Search transports...", text: $searchQuery)
-                            .foregroundColor(textPrimary)
+                    HStack(spacing: 10) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(textMuted)
+                            TextField("Search transports...", text: $searchQuery)
+                                .foregroundColor(textPrimary)
+                        }
+                        .padding(10)
+                        .background(cardBg)
+                        .cornerRadius(10)
+
+                        Button(action: {
+                            fetchTransportsFromSupabase()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Refresh")
+                                    .fontWeight(.bold)
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
                     }
-                    .padding(10)
-                    .background(cardBg)
-                    .cornerRadius(10)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -90,23 +135,37 @@ struct IOSTransportsContentView: View {
 
                 // TRANSPORTS CARDS LIST
                 ScrollView {
-                    LazyVStack(spacing: 14) {
-                        ForEach(filteredTransports) { t in
-                            IOSTransportCard(
-                                transport: t,
-                                onEdit: {
-                                    editingTransport = t
-                                    showFormSheet = true
-                                },
-                                onDelete: {
-                                    deleteTargetTransport = t
-                                    showDeleteAlert = true
-                                }
-                            )
+                    if isLoading {
+                        ProgressView("Loading Transports...")
+                            .padding(40)
+                    } else if filteredTransports.isEmpty {
+                        VStack(spacing: 8) {
+                            Spacer().frame(height: 40)
+                            Text("No transports found.")
+                                .foregroundColor(textMuted)
+                                .font(.subheadline)
                         }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        LazyVStack(spacing: 14) {
+                            ForEach(filteredTransports) { t in
+                                IOSTransportCard(
+                                    transport: t,
+                                    isAdmin: isAdmin,
+                                    onEdit: {
+                                        editingTransport = t
+                                        showFormSheet = true
+                                    },
+                                    onDelete: {
+                                        deleteTargetTransport = t
+                                        showDeleteSheet = true
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 80)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 80)
                 }
             }
 
@@ -117,76 +176,83 @@ struct IOSTransportsContentView: View {
             }) {
                 Image(systemName: "plus")
                     .font(.title2)
-                    .fontWeight(.semibold)
+                    .fontWeight(.bold)
                     .foregroundColor(.white)
                     .frame(width: 56, height: 56)
                     .background(Color.blue)
                     .clipShape(Circle())
-                    .shadow(color: Color.blue.opacity(0.3), radius: 6, x: 0, y: 3)
+                    .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 3)
             }
-            .padding(.trailing, 20)
-            .padding(.bottom, 20)
+            .padding(20)
         }
         .onAppear {
-            // loaded
+            fetchTransportsFromSupabase()
         }
         .sheet(isPresented: $showFormSheet) {
-            IOSTransportFormSheet(
-                transport: editingTransport,
-                onSave: { name, mobile, contact, vehicle, status in
-                    if let target = editingTransport {
-                        if let idx = transports.firstIndex(where: { $0.id == target.id }) {
-                            transports[idx].transportName = name
-                            transports[idx].mobile = mobile
-                            transports[idx].contactPerson = contact
-                            transports[idx].vehicleNumber = vehicle
-                            transports[idx].status = status
+            IOSTransportFormSheet(transport: editingTransport) { name, mobile, person, vehicle, status in
+                let payload: [String: Any] = [
+                    "name": name,
+                    "phone": mobile,
+                    "driver_name": person,
+                    "vehicle_number": vehicle,
+                    "status": status
+                ]
+
+                if let t = editingTransport {
+                    SupabaseIOSClient.shared.updateRecord(table: "transports", id: t.id, payload: payload) { _ in
+                        DispatchQueue.main.async {
+                            toastMsg = "Transport updated"
+                            fetchTransportsFromSupabase()
                         }
-                        toastMsg = "Transport updated"
-                    } else {
-                        let newT = IOSTransport(
-                            id: "\(1000 + transports.count + 1)",
-                            transportName: name,
-                            mobile: mobile,
-                            contactPerson: contact,
-                            vehicleNumber: vehicle,
-                            status: status,
-                            createdDate: "Today"
-                        )
-                        transports.insert(newT, at: 0)
-                        toastMsg = "New transport added"
                     }
-                    showFormSheet = false
+                } else {
+                    SupabaseIOSClient.shared.insertRecord(table: "transports", payload: payload) { _ in
+                        DispatchQueue.main.async {
+                            toastMsg = "Transport created"
+                            fetchTransportsFromSupabase()
+                        }
+                    }
                 }
-            )
+                showFormSheet = false
+            }
         }
-        .alert(isPresented: $showDeleteAlert) {
-            Alert(
-                title: Text("Delete Transport"),
-                message: Text("Are you sure you want to delete '\(deleteTargetTransport?.transportName ?? "")'?"),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let target = deleteTargetTransport {
-                        transports.removeAll(where: { $0.id == target.id })
-                        toastMsg = "Transport deleted"
+        .sheet(isPresented: $showDeleteSheet) {
+            if let target = deleteTargetTransport {
+                IOSThreeStepDeleteSheet(
+                    itemName: "Transport: \(target.transportName)",
+                    itemDetails: "Phone: \(target.mobile), Vehicle: \(target.vehicleNumber)",
+                    onClose: { showDeleteSheet = false },
+                    onConfirmDelete: {
+                        SupabaseIOSClient.shared.deleteRecord(table: "transports", id: target.id) { _ in
+                            DispatchQueue.main.async {
+                                toastMsg = "Transport deleted"
+                                fetchTransportsFromSupabase()
+                            }
+                        }
+                        showDeleteSheet = false
                     }
-                },
-                secondaryButton: .cancel()
-            )
+                )
+            }
         }
     }
 }
 
 struct IOSTransport: Identifiable {
     let id: String
-    var transportName: String
-    var mobile: String
-    var contactPerson: String
-    var vehicleNumber: String
-    var status: String
-    var createdDate: String
+    let transportName: String
+    let mobile: String
+    let contactPerson: String
+    let vehicleNumber: String
+    let status: String
+    let createdDate: String
 }
 
 struct IOSTransportCard: View {
+    let transport: IOSTransport
+    var isAdmin: Bool = true
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
     @AppStorage("crm_is_dark_mode") private var isDarkMode: Bool = false
 
     private var cardBg: Color {
@@ -199,42 +265,29 @@ struct IOSTransportCard: View {
         isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
     }
 
-    let transport: IOSTransport
-    var onEdit: () -> Void
-    var onDelete: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                HStack(spacing: 12) {
-                    Image(systemName: "shippingbox.fill")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                        .frame(width: 42, height: 42)
-                        .background(Color.blue.opacity(0.12))
-                        .cornerRadius(10)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(transport.transportName)
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(textPrimary)
-                        Text(transport.vehicleNumber)
-                            .font(.caption)
-                            .foregroundColor(textMuted)
-                    }
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(transport.transportName)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(textPrimary)
+                    Text("Vehicle: \(transport.vehicleNumber)")
+                        .font(.caption)
+                        .foregroundColor(textMuted)
                 }
 
                 Spacer()
 
                 Text(transport.status)
-                    .font(.caption)
+                    .font(.caption2)
                     .fontWeight(.bold)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(transport.status == "Active" ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
-                    .foregroundColor(transport.status == "Active" ? .green : .red)
-                    .cornerRadius(12)
+                    .background(transport.status == "Active" ? Color.green.opacity(0.12) : Color.gray.opacity(0.12))
+                    .foregroundColor(transport.status == "Active" ? .green : .gray)
+                    .cornerRadius(6)
             }
 
             Divider()
@@ -257,9 +310,11 @@ struct IOSTransportCard: View {
                         Image(systemName: "pencil")
                             .foregroundColor(.blue)
                     }
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
+                    if isAdmin {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }

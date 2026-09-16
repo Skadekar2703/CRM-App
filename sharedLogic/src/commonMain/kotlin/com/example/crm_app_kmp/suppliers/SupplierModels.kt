@@ -6,11 +6,15 @@ import kotlin.js.JsExport
 data class SupplierModel(
     val id: String,              // e.g. "SUP-001"
     val partyName: String,       // e.g. "Acme Global Supplies"
-    val contactPerson: String,   // e.g. "Jane Doe"
-    val mobile: String,          // e.g. "+1 (555) 123-4567"
-    val email: String = "",      // e.g. "jane@acmeglobal.com"
-    val address: String = "",    // e.g. "Industrial Area, Phase 2"
-    val status: String = "Active"// "Active" or "Inactive"
+    val contactPerson: String = "",
+    val mobile: String = "",
+    val email: String = "",
+    val address: String = "",
+    val paymentTerms: String = "Net 30 Days",
+    val photoUrl: String = "",
+    val openingBalance: Double = 0.0,
+    val status: String = "Active",// "Active" or "Inactive"
+    val createdAt: String = ""
 )
 
 @JsExport

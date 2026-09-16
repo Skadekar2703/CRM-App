@@ -20,9 +20,11 @@ struct IOSDashboardView: View {
                 IOSAreasContentView()
             case "Categories":
                 IOSCategoriesContentView()
+            case "Sales":
+                IOSSalesScreen()
             case "Items":
                 IOSItemsContentView()
-            case "Transports":
+            case "Transports", "Transport":
                 IOSTransportsContentView()
             case "Udhaari":
                 IOSUdhaariContentView()
@@ -56,8 +58,6 @@ struct IOSDashboardView: View {
                 } else {
                     IOSDashboardMainContentView(session: session, onLogout: onLogout, onNavigateSection: { activeSection = $0 })
                 }
-            case "Settings":
-                IOSSettingsView()
             case "Sign Out":
                 Color.clear.onAppear { onLogout() }
             default:
@@ -311,17 +311,19 @@ struct IOSDashboardMainContentView: View {
                         StitchShortcutTile(
                             title: "+ Customer",
                             sub: "Add new party",
-                            bgColor: Color(red: 240/255, green: 253/255, blue: 244/255),
-                            textColor: Color(red: 21/255, green: 128/255, blue: 61/255),
+                            bgColor: isDarkMode ? Color(red: 36/255, green: 29/255, blue: 8/255) : Color(red: 254/255, green: 252/255, blue: 232/255),
+                            textColor: isDarkMode ? Color(red: 250/255, green: 204/255, blue: 21/255) : Color(red: 202/255, green: 138/255, blue: 4/255),
+                            borderColor: isDarkMode ? Color(red: 113/255, green: 63/255, blue: 18/255) : Color(red: 254/255, green: 240/255, blue: 138/255),
                             iconName: "person.badge.plus",
                             action: { onNavigateSection("Customers") }
                         )
 
                         StitchShortcutTile(
-                            title: "+ Udhar",
+                            title: "+ Udhaari",
                             sub: "Debit / Give credit",
-                            bgColor: Color(red: 254/255, green: 242/255, blue: 242/255),
-                            textColor: Color(red: 185/255, green: 28/255, blue: 28/255),
+                            bgColor: isDarkMode ? Color(red: 40/255, green: 13/255, blue: 16/255) : Color(red: 254/255, green: 242/255, blue: 242/255),
+                            textColor: isDarkMode ? Color(red: 248/255, green: 113/255, blue: 113/255) : Color(red: 220/255, green: 38/255, blue: 38/255),
+                            borderColor: isDarkMode ? Color(red: 127/255, green: 29/255, blue: 29/255) : Color(red: 254/255, green: 202/255, blue: 202/255),
                             iconName: "plus",
                             action: { onNavigateSection("Udhaari") }
                         )
@@ -331,8 +333,9 @@ struct IOSDashboardMainContentView: View {
                         StitchShortcutTile(
                             title: "+ Jama",
                             sub: "Credit / Receive payment",
-                            bgColor: Color(red: 236/255, green: 253/255, blue: 245/255),
-                            textColor: Color(red: 4/255, green: 120/255, blue: 87/255),
+                            bgColor: isDarkMode ? Color(red: 9/255, green: 35/255, blue: 21/255) : Color(red: 240/255, green: 253/255, blue: 244/255),
+                            textColor: isDarkMode ? Color(red: 74/255, green: 222/255, blue: 128/255) : Color(red: 22/255, green: 197/255, blue: 94/255),
+                            borderColor: isDarkMode ? Color(red: 20/255, green: 83/255, blue: 45/255) : Color(red: 187/255, green: 247/255, blue: 208/255),
                             iconName: "banknote",
                             action: { onNavigateSection("Udhaari") }
                         )
@@ -340,8 +343,9 @@ struct IOSDashboardMainContentView: View {
                         StitchShortcutTile(
                             title: "+ Daag",
                             sub: "Record stock dispatch",
-                            bgColor: Color(red: 239/255, green: 246/255, blue: 255/255),
-                            textColor: Color(red: 29/255, green: 78/255, blue: 216/255),
+                            bgColor: isDarkMode ? Color(red: 11/255, green: 27/255, blue: 54/255) : Color(red: 239/255, green: 246/255, blue: 255/255),
+                            textColor: isDarkMode ? Color(red: 96/255, green: 165/255, blue: 250/255) : Color(red: 37/255, green: 99/255, blue: 235/255),
+                            borderColor: isDarkMode ? Color(red: 30/255, green: 58/255, blue: 138/255) : Color(red: 191/255, green: 219/255, blue: 254/255),
                             iconName: "shippingbox",
                             action: { onNavigateSection("Daag") }
                         )
@@ -518,6 +522,7 @@ struct StitchShortcutTile: View {
     let sub: String
     let bgColor: Color
     let textColor: Color
+    var borderColor: Color = Color.clear
     let iconName: String
     var action: () -> Void
 
@@ -536,16 +541,22 @@ struct StitchShortcutTile: View {
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(textColor)
+                        .lineLimit(1)
                     Text(sub)
                         .font(.caption2)
                         .foregroundColor(textColor.opacity(0.8))
+                        .lineLimit(2)
                 }
                 Spacer()
             }
-            .padding(14)
-            .frame(maxWidth: .infinity)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
             .background(bgColor)
             .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(borderColor, lineWidth: 1)
+            )
         }
     }
 }

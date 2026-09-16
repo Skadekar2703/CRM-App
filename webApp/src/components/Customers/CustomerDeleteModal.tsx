@@ -58,35 +58,35 @@ export const CustomerDeleteModal: React.FC<CustomerDeleteModalProps> = ({
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
-      <div className="modal-content" style={{ maxWidth: '520px', borderRadius: '16px', padding: '24px', backgroundColor: '#1E293B', color: '#F8FAFC', border: '1px solid #334155' }}>
+      <div className="modal-content" style={{ maxWidth: '520px', borderRadius: '16px', padding: '24px', backgroundColor: 'var(--bg-card, #ffffff)', color: 'var(--text-primary, #0f172a)', border: '1px solid var(--border-color, #e2e8f0)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, color: '#EF4444', fontSize: '18px', fontWeight: 800 }}>
             {step === 1 && '⚠️ Delete Customer? (Confirmation 1 of 3)'}
             {step === 2 && '🚨 Remove Record? (Confirmation 2 of 3)'}
             {step === 3 && '🛑 Final Permanent Delete (Confirmation 3 of 3)'}
           </h3>
-          <button className="modal-close-btn" onClick={onClose} type="button" style={{ color: '#94A3B8' }}>&times;</button>
+          <button className="modal-close-btn" onClick={onClose} type="button" style={{ color: 'var(--text-muted, #94a3b8)' }}>&times;</button>
         </div>
 
         {isStaff ? (
-          <div style={{ color: '#F87171', backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: '14px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderLeft: '4px solid #EF4444' }}>
+          <div style={{ color: '#DC2626', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '14px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderLeft: '4px solid #EF4444' }}>
             🔒 Only Admin can delete customer details. Access Denied.
           </div>
         ) : (
           <>
             {errorMsg && (
-              <div style={{ color: '#F87171', backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: '12px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', fontWeight: 700, borderLeft: '4px solid #EF4444' }}>
+              <div style={{ color: '#DC2626', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '12px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', fontWeight: 700, borderLeft: '4px solid #EF4444' }}>
                 ⚠️ {errorMsg}
               </div>
             )}
 
             {step === 1 && (
               <div>
-                <p style={{ color: '#CBD5E1', fontSize: '14px', lineHeight: '1.6', margin: '0 0 20px' }}>
+                <p style={{ color: 'var(--text-secondary, #475569)', fontSize: '14px', lineHeight: '1.6', margin: '0 0 20px' }}>
                   Delete customer <strong>{customer.name}</strong> (ID: {customer.customerId})?
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                  <button onClick={onClose} type="button" style={{ padding: '9px 18px', backgroundColor: '#334155', color: '#F8FAFC', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
+                  <button onClick={onClose} type="button" className="btn-secondary-udhaari" style={{ padding: '9px 18px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
                     Cancel
                   </button>
                   <button onClick={handleNextStep} type="button" style={{ padding: '9px 20px', backgroundColor: '#EF4444', color: '#FFFFFF', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 800 }}>
@@ -98,11 +98,11 @@ export const CustomerDeleteModal: React.FC<CustomerDeleteModalProps> = ({
 
             {step === 2 && (
               <div>
-                <p style={{ color: '#FCA5A5', backgroundColor: 'rgba(239, 68, 68, 0.12)', padding: '14px', borderRadius: '8px', borderLeft: '4px solid #EF4444', fontSize: '13px', lineHeight: '1.6', margin: '0 0 20px' }}>
+                <p style={{ color: '#DC2626', backgroundColor: 'rgba(239, 68, 68, 0.08)', padding: '14px', borderRadius: '8px', borderLeft: '4px solid #EF4444', fontSize: '13px', lineHeight: '1.6', margin: '0 0 20px' }}>
                   This will remove the customer from active CRM records. Continue?
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                  <button onClick={onClose} type="button" style={{ padding: '9px 18px', backgroundColor: '#334155', color: '#F8FAFC', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
+                  <button onClick={onClose} type="button" className="btn-secondary-udhaari" style={{ padding: '9px 18px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
                     Cancel
                   </button>
                   <button onClick={handleNextStep} type="button" style={{ padding: '9px 20px', backgroundColor: '#EF4444', color: '#FFFFFF', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 800 }}>
@@ -114,11 +114,11 @@ export const CustomerDeleteModal: React.FC<CustomerDeleteModalProps> = ({
 
             {step === 3 && (
               <div>
-                <div style={{ backgroundColor: '#0F172A', border: '1px solid #334155', borderRadius: '12px', padding: '14px', marginBottom: '20px' }}>
-                  <div style={{ fontSize: '11px', color: '#38BDF8', fontWeight: 800, textTransform: 'uppercase' }}>CUSTOMER DATA TO BE DELETED:</div>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#F8FAFC', marginTop: '4px' }}>{customer.name}</div>
-                  <div style={{ fontSize: '13px', color: '#94A3B8', marginTop: '2px' }}>ID: {customer.customerId} | Code: {customer.customerCode}</div>
-                  <div style={{ fontSize: '13px', color: '#94A3B8', marginTop: '2px' }}>Mobile: {customer.mobile}</div>
+                <div style={{ backgroundColor: 'var(--bg-surface-secondary, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '12px', padding: '14px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--color-primary, #2563eb)', fontWeight: 800, textTransform: 'uppercase' }}>CUSTOMER DATA TO BE DELETED:</div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary, #0f172a)', marginTop: '4px' }}>{customer.name}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginTop: '2px' }}>ID: {customer.customerId} | Code: {customer.customerCode}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginTop: '2px' }}>Mobile: {customer.mobile}</div>
                 </div>
 
                 <p style={{ color: '#EF4444', fontWeight: 800, fontSize: '14px', margin: '0 0 20px' }}>
@@ -126,7 +126,7 @@ export const CustomerDeleteModal: React.FC<CustomerDeleteModalProps> = ({
                 </p>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                  <button onClick={onClose} type="button" disabled={isDeleting} style={{ padding: '9px 18px', backgroundColor: '#334155', color: '#F8FAFC', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
+                  <button onClick={onClose} type="button" disabled={isDeleting} className="btn-secondary-udhaari" style={{ padding: '9px 18px', border: '1px solid var(--border-color, #cbd5e1)', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
                     Cancel
                   </button>
                   <button

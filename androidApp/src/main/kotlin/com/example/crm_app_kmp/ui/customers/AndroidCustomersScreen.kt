@@ -29,6 +29,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.example.crm_app_kmp.ui.components.AppDropdown
+import com.example.crm_app_kmp.ui.components.AppEmailField
+import com.example.crm_app_kmp.ui.components.AppFormButton
+import com.example.crm_app_kmp.ui.components.AppNumberField
+import com.example.crm_app_kmp.ui.components.AppPhoneField
+import com.example.crm_app_kmp.ui.components.AppSectionHeader
+import com.example.crm_app_kmp.ui.components.AppTextField
+import com.example.crm_app_kmp.ui.components.AppImagePicker
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
@@ -71,6 +81,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -355,10 +366,12 @@ fun AndroidCustomersContent() {
                                 creditBlocked = data.creditBlocked
                             )
                             res.onSuccess {
-                                toastMsg = "Customer profile updated successfully."
+                                android.widget.Toast.makeText(context, "Customer updated successfully", android.widget.Toast.LENGTH_SHORT).show()
+                                showFormDialog = false
+                                editingCustomer = null
                                 refreshCustomers()
                             }.onFailure { err ->
-                                toastMsg = err.message ?: "Failed to update customer."
+                                android.widget.Toast.makeText(context, err.message ?: "Failed to update customer", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         } else {
                             val res = supabaseClient.addCustomer(
@@ -388,14 +401,13 @@ fun AndroidCustomersContent() {
                                 creditBlocked = data.creditBlocked
                             )
                             res.onSuccess {
-                                toastMsg = "New customer created successfully."
+                                android.widget.Toast.makeText(context, "Customer created successfully", android.widget.Toast.LENGTH_SHORT).show()
+                                showFormDialog = false
                                 refreshCustomers()
                             }.onFailure { err ->
-                                toastMsg = err.message ?: "Failed to create customer."
+                                android.widget.Toast.makeText(context, err.message ?: "Failed to create customer", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         }
-                        showFormDialog = false
-                        editingCustomer = null
                     }
                 }
             )
@@ -470,6 +482,21 @@ fun AndroidCustomersContent() {
                 }
             )
         }
+
+        // FAB ADD CUSTOMER BUTTON
+        androidx.compose.material3.FloatingActionButton(
+            onClick = {
+                editingCustomer = null
+                showFormDialog = true
+            },
+            containerColor = PrimaryBlue,
+            contentColor = Color.White,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Customer", tint = Color.White, modifier = Modifier.size(24.dp))
+        }
     }
 }
 
@@ -482,20 +509,48 @@ private fun SummaryCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.height(94.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = DarkCardBg),
         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(title, fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-            Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextWhite)
-            Text(subText, fontSize = 10.sp, color = accentColor, fontWeight = FontWeight.Bold)
+            Box(
+                modifier = Modifier.height(26.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 10.sp,
+                    color = TextMuted,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.3.sp,
+                    lineHeight = 12.5.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = value,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextWhite,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subText,
+                fontSize = 10.5.sp,
+                color = accentColor,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -816,7 +871,6 @@ private fun AndroidCustomerFormDialog(
     var cibilStatus by remember { mutableStateOf(cleanNull(editingCustomer?.cibilStatus, "Good")) }
     var category by remember { mutableStateOf(cleanNull(editingCustomer?.category)) }
     var categoryId by remember { mutableStateOf<String?>(editingCustomer?.categoryId) }
-    val dbCategories = remember { mutableStateListOf<Pair<String, String>>() }
     var creditLimitText by remember { mutableStateOf(editingCustomer?.creditLimit?.toInt()?.toString() ?: "50000") }
     var openingBalanceText by remember { mutableStateOf(editingCustomer?.openingBalance?.toInt()?.toString() ?: "0") }
     var taxNo by remember { mutableStateOf(cleanNull(editingCustomer?.taxNo)) }
@@ -824,7 +878,6 @@ private fun AndroidCustomerFormDialog(
 
     var area by remember { mutableStateOf(cleanNull(editingCustomer?.area)) }
     var areaId by remember { mutableStateOf<String?>(editingCustomer?.areaId) }
-    val dbAreas = remember { mutableStateListOf<Pair<String, String>>() }
     var address by remember { mutableStateOf(cleanNull(editingCustomer?.address)) }
 
     var guarantorName by remember { mutableStateOf(cleanNull(editingCustomer?.guarantorName)) }
@@ -835,36 +888,79 @@ private fun AndroidCustomerFormDialog(
     var status by remember { mutableStateOf(cleanNull(editingCustomer?.status, "Active")) }
     var creditBlocked by remember { mutableStateOf(editingCustomer?.creditBlocked ?: false) }
 
-    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var isCategoriesLoading by remember { mutableStateOf(true) }
+    var categoriesError by remember { mutableStateOf<String?>(null) }
+    val dbCategories = remember { mutableStateListOf<Pair<String, String>>() }
+
+    var isAreasLoading by remember { mutableStateOf(true) }
+    var areasError by remember { mutableStateOf<String?>(null) }
+    val dbAreas = remember { mutableStateListOf<Pair<String, String>>() }
+
+    var isUploadingPhoto by remember { mutableStateOf(false) }
     val isStaff = userRole.equals("STAFF", ignoreCase = true) && editingCustomer != null
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val supabaseClient = remember { com.example.crm_app_kmp.data.SupabaseAndroidClient(context) }
 
-    LaunchedEffect(Unit) {
-        val catRes = supabaseClient.fetchTable("categories")
-        catRes.onSuccess { arr ->
-            dbCategories.clear()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val id = obj.optString("id", "")
-                val name = obj.optString("name", "")
-                if (name.isNotBlank()) {
-                    dbCategories.add(Pair(id, name))
+    fun showToast(msg: String) {
+        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    isUploadingPhoto = true
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        val fileName = "customer_${System.currentTimeMillis()}.jpg"
+                        val uploadRes = supabaseClient.uploadCustomerPhoto(bytes, fileName)
+                        uploadRes.onSuccess { uploadedPath ->
+                            photoUrl = uploadedPath
+                        }.onFailure { err ->
+                            showToast("Photo upload failed: ${err.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    showToast("Error reading photo: ${e.message}")
+                } finally {
+                    isUploadingPhoto = false
                 }
             }
         }
+    }
 
-        val areaRes = supabaseClient.fetchTable("areas")
-        areaRes.onSuccess { arr ->
-            dbAreas.clear()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val id = obj.optString("id", "")
-                val name = obj.optString("name", "")
-                if (name.isNotBlank()) {
-                    dbAreas.add(Pair(id, name))
-                }
+    LaunchedEffect(Unit) {
+        isCategoriesLoading = true
+        categoriesError = null
+        val catRes = supabaseClient.fetchCategoriesList()
+        isCategoriesLoading = false
+        catRes.onSuccess { list ->
+            dbCategories.clear()
+            dbCategories.addAll(list)
+            if (editingCustomer != null && categoryId == null && category.isNotBlank()) {
+                val match = list.find { it.second.equals(category, ignoreCase = true) }
+                if (match != null) categoryId = match.first
             }
+        }.onFailure {
+            categoriesError = "Unable to load categories"
+        }
+
+        isAreasLoading = true
+        areasError = null
+        val areaRes = supabaseClient.fetchAreasList()
+        isAreasLoading = false
+        areaRes.onSuccess { list ->
+            dbAreas.clear()
+            dbAreas.addAll(list)
+            if (editingCustomer != null && areaId == null && area.isNotBlank()) {
+                val match = list.find { it.second.equals(area, ignoreCase = true) }
+                if (match != null) areaId = match.first
+            }
+        }.onFailure {
+            areasError = "Unable to load areas"
         }
     }
 
@@ -889,7 +985,7 @@ private fun AndroidCustomerFormDialog(
                     .fillMaxWidth()
                     .padding(18.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -911,256 +1007,228 @@ private fun AndroidCustomerFormDialog(
                     Text("🔒 Only Admin can edit customer details.", color = CibilYellow, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                errorMsg?.let { err ->
-                    Text("⚠️ $err", color = BakiRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                // SECTION 1 — CUSTOMER DETAILS
+                AppSectionHeader(title = "SECTION 1 — CUSTOMER DETAILS")
 
-                // SECTION 1 — PERSONAL INFORMATION
-                Text("1. PERSONAL INFORMATION", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
-
-                OutlinedTextField(
-                    value = photoUrl,
-                    onValueChange = { photoUrl = it },
+                AppImagePicker(
+                    label = "Customer Photo",
+                    photoUrl = photoUrl,
+                    onPickImage = { imagePickerLauncher.launch("image/*") },
+                    onRemoveImage = { photoUrl = "" },
                     enabled = !isStaff,
-                    label = { Text("Photo Path / URL", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    isUploading = isUploadingPhoto
                 )
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Full Name",
                     value = name,
                     onValueChange = { name = it },
+                    required = true,
                     enabled = !isStaff,
-                    label = { Text("Full Name *", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "Full Name"
                 )
 
-                OutlinedTextField(
+                AppPhoneField(
+                    label = "Mobile Number (10 Digits)",
                     value = mobile,
-                    onValueChange = { mobile = it.filter { c -> c.isDigit() } },
+                    onValueChange = { mobile = it },
+                    required = true,
                     enabled = !isStaff,
-                    label = { Text("Mobile Number (10 digits) *", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "9876543210"
                 )
 
-                OutlinedTextField(
+                AppPhoneField(
+                    label = "Alternate Mobile Number",
                     value = alternateMobile,
-                    onValueChange = { alternateMobile = it.filter { c -> c.isDigit() } },
+                    onValueChange = { alternateMobile = it },
                     enabled = !isStaff,
-                    label = { Text("Alternate Mobile Number", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "Optional 10 Digits"
                 )
 
-                OutlinedTextField(
+                AppEmailField(
+                    label = "Email Address",
                     value = email,
                     onValueChange = { email = it },
                     enabled = !isStaff,
-                    label = { Text("Email Address", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "customer@email.com"
+                )
+
+                AppTextField(
+                    label = "ID / CNC Number",
+                    value = idCncNo,
+                    onValueChange = { idCncNo = it },
+                    enabled = !isStaff,
+                    placeholder = "National ID / CNC No"
                 )
 
                 // SECTION 2 — CUSTOMER IDENTITY
-                Text("2. CUSTOMER IDENTITY", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                AppSectionHeader(title = "SECTION 2 — CUSTOMER IDENTITY")
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Customer ID (Server-Generated)",
                     value = customerId,
                     onValueChange = {},
-                    enabled = false,
-                    label = { Text("Customer ID (Server-Generated)", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    readOnly = true,
+                    enabled = false
                 )
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "CD Code",
                     value = customerCode,
                     onValueChange = { customerCode = it },
+                    required = true,
                     enabled = !isStaff,
-                    label = { Text("CD Code * (e.g. cd08, ABC123, 12345)", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "e.g. cd08, ABC123, 12345"
                 )
 
                 // SECTION 3 — CREDIT INFORMATION & CATEGORY
-                Text("3. CREDIT INFORMATION & CATEGORY", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                AppSectionHeader(title = "SECTION 3 — CREDIT INFORMATION & CATEGORY")
 
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = {
-                        category = it
-                        if (errorMsg != null) errorMsg = null
+                AppDropdown(
+                    label = "Category",
+                    selectedValue = category,
+                    options = dbCategories.map { it.second },
+                    placeholder = when {
+                        isCategoriesLoading -> "Loading categories..."
+                        categoriesError != null -> "Unable to load categories"
+                        dbCategories.isEmpty() -> "No categories available"
+                        else -> "-- Select Category --"
                     },
-                    enabled = !isStaff,
-                    label = { Text("Category * (e.g. Retailer, Wholesaler, VIP)", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    isLoading = isCategoriesLoading,
+                    emptyMessage = when {
+                        categoriesError != null -> categoriesError!!
+                        else -> "No categories available"
+                    },
+                    onSelect = { sel ->
+                        category = sel
+                        val match = dbCategories.find { it.second == sel }
+                        categoryId = match?.first
+                    },
+                    required = true,
+                    enabled = !isStaff
                 )
 
-                if (dbCategories.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        dbCategories.forEach { pair ->
-                            val isSel = category.equals(pair.second, ignoreCase = true)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSel) PrimaryBlue else Color(0xFF1E293B))
-                                    .border(1.dp, if (isSel) PrimaryBlue else Color(0xFF334155), RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        category = pair.second
-                                        categoryId = pair.first
-                                        if (errorMsg != null) errorMsg = null
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = pair.second,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSel) Color.White else TextMuted
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = cibilStatus,
-                        onValueChange = { cibilStatus = it },
-                        enabled = !isStaff,
-                        label = { Text("CIBIL Status", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = creditLimitText,
-                        onValueChange = { creditLimitText = it.filter { c -> c.isDigit() } },
-                        enabled = !isStaff,
-                        label = { Text("Credit Limit (₹) *", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                }
-
-                if (editingCustomer == null) {
-                    OutlinedTextField(
-                        value = openingBalanceText,
-                        onValueChange = { openingBalanceText = it.filter { c -> c.isDigit() } },
-                        label = { Text("Opening Balance Baki (₹)", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                }
-
-                // SECTION 4 — ADDRESS
-                Text("4. ADDRESS & AREA", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
-
-                OutlinedTextField(
-                    value = area,
-                    onValueChange = { area = it },
-                    enabled = !isStaff,
-                    label = { Text("Area / Location *", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                AppDropdown(
+                    label = "CIBIL Status",
+                    selectedValue = cibilStatus,
+                    options = listOf("Good", "Medium", "Low", "Bad"),
+                    placeholder = "-- Select CIBIL Status --",
+                    onSelect = { cibilStatus = it },
+                    required = true,
+                    enabled = !isStaff
                 )
 
-                if (dbAreas.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        dbAreas.forEach { pair ->
-                            val isSel = area.equals(pair.second, ignoreCase = true)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSel) PrimaryBlue else Color(0xFF1E293B))
-                                    .border(1.dp, if (isSel) PrimaryBlue else Color(0xFF334155), RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        area = pair.second
-                                        areaId = pair.first
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = pair.second,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSel) Color.White else TextMuted
-                                )
-                            }
-                        }
-                    }
-                }
+                AppNumberField(
+                    label = "Credit Limit (₹)",
+                    value = creditLimitText,
+                    onValueChange = { creditLimitText = it },
+                    required = true,
+                    enabled = !isStaff,
+                    placeholder = "50000",
+                    helperText = "Max allowed Baki balance"
+                )
 
-                OutlinedTextField(
+                AppNumberField(
+                    label = "Opening Balance (₹)",
+                    value = openingBalanceText,
+                    onValueChange = { openingBalanceText = it },
+                    enabled = !isStaff && editingCustomer == null,
+                    placeholder = "0"
+                )
+
+                AppTextField(
+                    label = "Tax Number (GST/VAT)",
+                    value = taxNo,
+                    onValueChange = { taxNo = it },
+                    enabled = !isStaff,
+                    placeholder = "GSTIN / Tax No"
+                )
+
+                AppNumberField(
+                    label = "Udhaari Wapisi Din (Credit Return Days)",
+                    value = udharWapisiDinText,
+                    onValueChange = { udharWapisiDinText = it },
+                    enabled = !isStaff,
+                    placeholder = "30",
+                    allowDecimal = false
+                )
+
+                // SECTION 4 — ADDRESS DETAILS
+                AppSectionHeader(title = "SECTION 4 — ADDRESS DETAILS")
+
+                AppDropdown(
+                    label = "Area / Location",
+                    selectedValue = area,
+                    options = dbAreas.map { it.second },
+                    placeholder = when {
+                        isAreasLoading -> "Loading areas..."
+                        areasError != null -> "Unable to load areas"
+                        dbAreas.isEmpty() -> "No areas available"
+                        else -> "-- Select Area --"
+                    },
+                    isLoading = isAreasLoading,
+                    emptyMessage = when {
+                        areasError != null -> areasError!!
+                        else -> "No areas available"
+                    },
+                    onSelect = { sel ->
+                        area = sel
+                        val match = dbAreas.find { it.second == sel }
+                        areaId = match?.first
+                    },
+                    required = true,
+                    enabled = !isStaff
+                )
+
+                AppTextField(
+                    label = "Full Address",
                     value = address,
                     onValueChange = { address = it },
                     enabled = !isStaff,
-                    label = { Text("Full Address", fontSize = 12.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    singleLine = false,
+                    minLines = 2,
+                    placeholder = "Complete physical address..."
                 )
 
-                // SECTION 5 — GUARANTOR
-                Text("5. GUARANTOR INFORMATION", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                // SECTION 5 — GUARANTOR DETAILS
+                AppSectionHeader(title = "SECTION 5 — GUARANTOR DETAILS")
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Guarantor Name",
                     value = guarantorName,
                     onValueChange = { guarantorName = it },
                     enabled = !isStaff,
-                    label = { Text("Guarantor Name", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "Guarantor full name"
                 )
 
-                OutlinedTextField(
+                AppPhoneField(
+                    label = "Guarantor Mobile Number",
                     value = guarantorMobile,
-                    onValueChange = { guarantorMobile = it.filter { c -> c.isDigit() } },
+                    onValueChange = { guarantorMobile = it },
                     enabled = !isStaff,
-                    label = { Text("Guarantor Mobile", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    placeholder = "10 Digits"
                 )
 
-                // SECTION 6 — ADDITIONAL & CONTROLS
-                Text("6. ADDITIONAL INFORMATION & CONTROLS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                // SECTION 6 — STATUS & CONTROLS
+                AppSectionHeader(title = "SECTION 6 — STATUS & CONTROLS")
 
-                OutlinedTextField(
+                AppTextField(
+                    label = "Remark / Internal Notes",
                     value = remark,
                     onValueChange = { remark = it },
                     enabled = !isStaff,
-                    label = { Text("Remark / Notes", fontSize = 12.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    singleLine = false,
+                    minLines = 2,
+                    placeholder = "Internal account remarks..."
+                )
+
+                AppDropdown(
+                    label = "Account Status",
+                    selectedValue = status,
+                    options = listOf("Active", "Inactive"),
+                    placeholder = "-- Select Status --",
+                    onSelect = { status = it },
+                    enabled = !isStaff
                 )
 
                 Row(
@@ -1182,27 +1250,65 @@ private fun AndroidCustomerFormDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel", color = TextMuted)
-                    }
+                    AppFormButton(
+                        text = "Cancel",
+                        onClick = onDismiss,
+                        isSecondary = true
+                    )
                     Spacer(modifier = Modifier.width(10.dp))
                     if (!isStaff) {
-                        Button(
+                        AppFormButton(
+                            text = if (editingCustomer != null) "Update Customer" else "Create Customer",
                             onClick = {
-                                val nameErr = CustomerValidator.validateName(name)
-                                if (nameErr != null) { errorMsg = nameErr; return@Button }
+                                if (name.isBlank()) {
+                                    showToast("Please enter the full name")
+                                    return@AppFormButton
+                                }
 
                                 val mobileErr = CustomerValidator.validateMobile(mobile)
-                                if (mobileErr != null) { errorMsg = mobileErr; return@Button }
+                                if (mobileErr != null) {
+                                    showToast("Please enter a valid 10-digit mobile number")
+                                    return@AppFormButton
+                                }
 
-                                val catErr = CustomerValidator.validateCategory(category)
-                                if (catErr != null) { errorMsg = catErr; return@Button }
+                                if (category.isBlank()) {
+                                    showToast("Please select the category")
+                                    return@AppFormButton
+                                }
 
-                                val limitVal = creditLimitText.toDoubleOrNull() ?: 50000.0
+                                if (cibilStatus.isBlank()) {
+                                    showToast("Please select the CIBIL status")
+                                    return@AppFormButton
+                                }
+
+                                if (customerCode.isBlank()) {
+                                    showToast("Please enter the CD Code")
+                                    return@AppFormButton
+                                }
+
+                                if (area.isBlank()) {
+                                    showToast("Please select the area")
+                                    return@AppFormButton
+                                }
+
+                                if (guarantorMobile.isNotBlank() && guarantorMobile.length != 10) {
+                                    showToast("Please enter a valid 10-digit guarantor mobile number")
+                                    return@AppFormButton
+                                }
+
+                                val limitVal = creditLimitText.toDoubleOrNull()
+                                if (limitVal == null || limitVal < 0) {
+                                    showToast("Please enter a valid credit limit")
+                                    return@AppFormButton
+                                }
 
                                 val matchedPair = dbCategories.firstOrNull { it.second.equals(category.trim(), ignoreCase = true) }
                                 val finalCatName = matchedPair?.second ?: category.trim()
                                 val finalCatId = matchedPair?.first ?: categoryId
+
+                                val matchedArea = dbAreas.firstOrNull { it.second.equals(area.trim(), ignoreCase = true) }
+                                val finalAreaName = matchedArea?.second ?: area.trim()
+                                val finalAreaId = matchedArea?.first ?: areaId
 
                                 onSave(
                                     CustomerDetailsModel(
@@ -1210,33 +1316,30 @@ private fun AndroidCustomerFormDialog(
                                         customerId = customerId,
                                         customerCode = customerCode,
                                         photoUrl = photoUrl,
-                                        name = name,
-                                        mobile = mobile,
-                                        alternateMobile = alternateMobile,
-                                        email = email,
-                                        idCncNo = idCncNo,
+                                        name = name.trim(),
+                                        mobile = mobile.trim(),
+                                        alternateMobile = alternateMobile.trim(),
+                                        email = email.trim(),
+                                        idCncNo = idCncNo.trim(),
                                         cibilStatus = cibilStatus,
                                         category = finalCatName,
                                         categoryId = finalCatId,
                                         creditLimit = limitVal,
                                         openingBalance = openingBalanceText.toDoubleOrNull() ?: 0.0,
-                                        taxNo = taxNo,
+                                        taxNo = taxNo.trim(),
                                         udharWapisiDin = udharWapisiDinText.toIntOrNull() ?: 30,
-                                        address = address,
-                                        area = area,
-                                        remark = remark,
-                                        guarantorName = guarantorName,
-                                        guarantorMobile = guarantorMobile,
+                                        address = address.trim(),
+                                        area = finalAreaName,
+                                        areaId = finalAreaId,
+                                        remark = remark.trim(),
+                                        guarantorName = guarantorName.trim(),
+                                        guarantorMobile = guarantorMobile.trim(),
                                         status = status,
                                         creditBlocked = creditBlocked
                                     )
                                 )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Save Customer", fontWeight = FontWeight.Bold)
-                        }
+                            }
+                        )
                     }
                 }
             }

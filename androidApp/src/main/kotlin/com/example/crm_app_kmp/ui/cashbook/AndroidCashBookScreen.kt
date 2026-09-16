@@ -317,7 +317,7 @@ private fun CashBookFormDialog(
         sourceModule: String
     ) -> Unit
 ) {
-    var date by remember { mutableStateOf("29 Aug 2026") }
+    var date by remember { mutableStateOf("2026-08-29") }
     var particulars by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("IN") }
     var amountStr by remember { mutableStateOf("") }
@@ -333,8 +333,7 @@ private fun CashBookFormDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
@@ -349,88 +348,103 @@ private fun CashBookFormDialog(
                 }
 
                 errorMsg?.let { err ->
-                    Text("⚠️ $err", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Surface(
+                        color = Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ $err",
+                            color = ErrorRed,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
                 }
 
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    placeholder = { Text("Date *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = type,
-                    onValueChange = { type = it },
-                    placeholder = { Text("Type (IN / OUT) *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = amountStr,
-                    onValueChange = { amountStr = it },
-                    placeholder = { Text("Amount (₹) *", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = sourceModule,
-                    onValueChange = { sourceModule = it },
-                    placeholder = { Text("Source Module (Sales, Expenses...)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                OutlinedTextField(
-                    value = particulars,
-                    onValueChange = { particulars = it },
-                    placeholder = { Text("Particulars / Description *", fontSize = 13.sp) },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant, contentColor = TextPrimary),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            val amt = amountStr.toDoubleOrNull()
-                            if (date.isBlank()) {
-                                errorMsg = "Date is required."
-                            } else if (particulars.isBlank()) {
-                                errorMsg = "Particulars description is required."
-                            } else if (amt == null || amt <= 0) {
-                                errorMsg = "Amount must be greater than 0."
-                            } else {
-                                onSave(date.trim(), particulars.trim(), type.uppercase().trim(), amt, sourceModule.trim())
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDatePicker(
+                                    value = date,
+                                    onValueChange = { date = it; errorMsg = null },
+                                    label = "Transaction Date",
+                                    isRequired = true
+                                )
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Save Entry", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = if (type == "IN") "Cash IN (Receipt)" else "Cash OUT (Payment)",
+                                    onValueChange = { selected ->
+                                        type = if (selected.contains("IN")) "IN" else "OUT"
+                                    },
+                                    label = "Direction (IN / OUT)",
+                                    options = listOf("Cash IN (Receipt)", "Cash OUT (Payment)"),
+                                    isRequired = true
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppNumberField(
+                                    value = amountStr,
+                                    onValueChange = { amountStr = it; errorMsg = null },
+                                    label = "Amount (₹)",
+                                    placeholder = "e.g. 5000.00",
+                                    isRequired = true,
+                                    allowDecimal = true
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.example.crm_app_kmp.ui.components.AppDropdown(
+                                    value = sourceModule,
+                                    onValueChange = { sourceModule = it },
+                                    label = "Source / Category",
+                                    options = listOf("Manual", "Sales", "Expenses", "Supplier Ledger", "Udhaari", "Cheques")
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppTextField(
+                            value = particulars,
+                            onValueChange = { particulars = it; errorMsg = null },
+                            label = "Particulars / Description",
+                            placeholder = "Enter transaction details (e.g. Cash sale, Rent payment)...",
+                            isRequired = true
+                        )
+                    }
+                    item {
+                        com.example.crm_app_kmp.ui.components.AppFormButton(
+                            text = "Save Entry",
+                            onClick = {
+                                if (date.isBlank()) {
+                                    errorMsg = "Date is required"
+                                    return@AppFormButton
+                                }
+                                if (particulars.isBlank()) {
+                                    errorMsg = "Particulars/Description is required"
+                                    return@AppFormButton
+                                }
+                                val numAmt = amountStr.toDoubleOrNull()
+                                if (numAmt == null || numAmt <= 0) {
+                                    errorMsg = "Amount must be greater than 0"
+                                    return@AppFormButton
+                                }
+                                onSave(date.trim(), particulars.trim(), type, numAmt, sourceModule)
+                            }
+                        )
                     }
                 }
             }
         }
     }
 }
+

@@ -5,7 +5,12 @@ import { DeleteExpenseDialog } from './DeleteExpenseDialog';
 import { supabase } from '../../lib/supabase';
 import '../Udhaari/Udhaari.css';
 
-export const WebExpensesScreen: React.FC = () => {
+interface WebExpensesScreenProps {
+  userRole?: 'ADMIN' | 'STAFF' | string;
+}
+
+export const WebExpensesScreen: React.FC<WebExpensesScreenProps> = ({ userRole }) => {
+  const [role, setRole] = useState<string>(userRole ? String(userRole).toUpperCase() : 'STAFF');
   const [expenses, setExpenses] = useState<WebExpense[]>(INITIAL_WEB_EXPENSES);
   const [searchQuery, setSearchQuery] = useState('');
   const [pageSize, setPageSize] = useState(10);
@@ -49,8 +54,27 @@ export const WebExpensesScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase.from('users').select('role').eq('id', user.id).single();
+          if (data?.role) {
+            setRole(String(data.role).toUpperCase());
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (userRole) {
+      setRole(String(userRole).toUpperCase());
+    } else {
+      fetchUserRole();
+    }
     fetchExpensesFromSupabase();
-  }, []);
+  }, [userRole]);
 
   // CALCULATE SUMMARY CARDS DYNAMICALLY
   const summary = useMemo(() => {
@@ -366,13 +390,15 @@ export const WebExpensesScreen: React.FC = () => {
                             Edit
                           </button>
 
-                          <button
-                            className="btn-action-settle"
-                            style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
-                            onClick={() => setDeletingExpense(expense)}
-                          >
-                            Delete
-                          </button>
+                          {role === 'ADMIN' && (
+                            <button
+                              className="btn-action-settle"
+                              style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
+                              onClick={() => setDeletingExpense(expense)}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -435,6 +461,7 @@ export const WebExpensesScreen: React.FC = () => {
         <DeleteExpenseDialog
           isOpen={deletingExpense !== null}
           expense={deletingExpense}
+          userRole={role}
           onClose={() => setDeletingExpense(null)}
           onConfirm={handleConfirmDelete}
         />

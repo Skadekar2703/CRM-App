@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct IOSCustomersView: View {
     var onNavigateSection: (String) -> Void = { _ in }
@@ -1012,14 +1013,40 @@ struct IOSCustomerFormSheet: View {
     @State private var customerId = "100001"
     @State private var name = ""
     @State private var mobile = ""
+    @State private var alternateMobile = ""
+    @State private var email = ""
+    @State private var idCncNo = ""
     @State private var cdCode = ""
+    @State private var photoUrl: String? = nil
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var selectedPhotoImage: UIImage? = nil
+    @State private var isUploadingPhoto = false
+
+    @State private var cibilStatus = "Good"
+    @State private var cibilScore = 750
     @State private var category = ""
-    @State private var area = ""
     @State private var creditLimitText = "50000"
+    @State private var openingBalanceText = "0"
+    @State private var taxNo = ""
+    @State private var udharWapisiDinText = "30"
+
+    @State private var area = ""
+    @State private var address = ""
+
+    @State private var guarantorName = ""
+    @State private var guarantorMobile = ""
+
+    @State private var remark = ""
+
+    @State private var status = "Active"
     @State private var creditBlocked = false
+
     @State private var dbCategories: [String] = []
     @State private var dbAreas: [String] = []
     @State private var errorMsg: String? = nil
+
+    let cibilOptions = ["Good", "Medium", "Low", "Bad"]
+    let statusOptions = ["Active", "Inactive"]
 
     func fetchDbCategories() {
         SupabaseIOSClient.shared.fetchTable(table: "categories") { res in
@@ -1053,19 +1080,94 @@ struct IOSCustomerFormSheet: View {
                     }
                 }
 
-                Section(header: Text("Customer Details")) {
-                    HStack {
-                        Text("UID").foregroundColor(.gray)
-                        Spacer()
-                        Text(customerId).bold().foregroundColor(.cyan)
+                // SECTION 1 — CUSTOMER DETAILS
+                Section(header: Text("SECTION 1 — CUSTOMER DETAILS")) {
+                    HStack(spacing: 14) {
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            HStack {
+                                if let img = selectedPhotoImage {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.blue, lineWidth: 2))
+                                } else if let photoStr = photoUrl, !photoStr.isEmpty, let url = URL(string: photoStr) {
+                                    AsyncImage(url: url) { phase in
+                                        if let image = phase.image {
+                                            image.resizable().scaledToFill().frame(width: 56, height: 56).clipShape(Circle())
+                                        } else {
+                                            Image(systemName: "person.crop.circle.fill").resizable().frame(width: 56, height: 56).foregroundColor(.blue)
+                                        }
+                                    }
+                                } else {
+                                    Image(systemName: "camera.circle.fill")
+                                        .resizable()
+                                        .frame(width: 56, height: 56)
+                                        .foregroundColor(.blue)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Customer Photo").font(.subheadline).bold()
+                                    Text(isUploadingPhoto ? "Uploading..." : (selectedPhotoImage != nil || (photoUrl != nil && !photoUrl!.isEmpty)) ? "Tap to Replace Photo" : "Tap to Add Photo")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                        .onChange(of: selectedPhotoItem) { newItem in
+                            Task {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                   let uiImage = UIImage(data: data) {
+                                    await MainActor.run {
+                                        self.selectedPhotoImage = uiImage
+                                        self.isUploadingPhoto = true
+                                    }
+                                    let fileName = "customer_\(Int(Date().timeIntervalSince1970)).jpg"
+                                    SupabaseIOSClient.shared.uploadCustomerPhoto(imageData: data, fileName: fileName) { result in
+                                        DispatchQueue.main.async {
+                                            self.isUploadingPhoto = false
+                                            switch result {
+                                            case .success(let path):
+                                                self.photoUrl = path
+                                            case .failure(let err):
+                                                self.errorMsg = "Photo upload error: \(err.localizedDescription)"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
+
+                    HStack {
+                        Text("Customer ID (Auto-Generated)")
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text(customerId)
+                            .bold()
+                            .foregroundColor(.blue)
+                    }
+
                     TextField("Full Name *", text: $name)
                     TextField("Mobile Number (10 Digits) *", text: $mobile)
                         .keyboardType(.numberPad)
-                    TextField("CD Code * (e.g. cd08, ABC123, 12345)", text: $cdCode)
+                    TextField("Alternate Mobile", text: $alternateMobile)
+                        .keyboardType(.numberPad)
+                    TextField("Email Address", text: $email)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                    TextField("ID / CNC Number", text: $idCncNo)
+                    TextField("CD Code *", text: $cdCode)
                 }
 
-                Section(header: Text("Category *")) {
+                // SECTION 2 — CREDIT & GRADE
+                Section(header: Text("SECTION 2 — CREDIT & GRADE")) {
+                    Picker("CIBIL Status", selection: $cibilStatus) {
+                        ForEach(cibilOptions, id: \.self) { opt in
+                            Text(opt).tag(opt)
+                        }
+                    }
+
                     Picker("Category *", selection: $category) {
                         Text("-- Select Category --").tag("")
                         ForEach(dbCategories, id: \.self) { cat in
@@ -1073,30 +1175,59 @@ struct IOSCustomerFormSheet: View {
                         }
                     }
 
-                    if dbCategories.isEmpty {
-                        Text("No customer categories found in database.")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                }
-
-                Section(header: Text("Credit & Grade")) {
                     TextField("Credit Limit (₹) *", text: $creditLimitText)
                         .keyboardType(.numberPad)
-                    Toggle("Credit Blocked", isOn: $creditBlocked)
+                    TextField("Opening Balance (₹)", text: $openingBalanceText)
+                        .keyboardType(.numberPad)
+                    TextField("Tax Number (GST/VAT)", text: $taxNo)
+                    TextField("Udhaari Wapisi Din (Credit Return Days)", text: $udharWapisiDinText)
+                        .keyboardType(.numberPad)
                 }
 
-                Section(header: Text("Address & Area *")) {
+                // SECTION 3 — ADDRESS
+                Section(header: Text("SECTION 3 — ADDRESS")) {
                     Picker("Area / Location *", selection: $area) {
                         Text("-- Select Area --").tag("")
                         ForEach(dbAreas, id: \.self) { aName in
                             Text(aName).tag(aName)
                         }
                     }
-                    TextField("Area Name", text: $area)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Full Address").font(.caption).foregroundColor(.gray)
+                        TextEditor(text: $address)
+                            .frame(minHeight: 60)
+                    }
+                }
+
+                // SECTION 4 — GUARANTOR DETAILS
+                Section(header: Text("SECTION 4 — GUARANTOR DETAILS")) {
+                    TextField("Guarantor Name", text: $guarantorName)
+                    TextField("Guarantor Mobile Number", text: $guarantorMobile)
+                        .keyboardType(.numberPad)
+                }
+
+                // SECTION 5 — REMARK / DESCRIPTION
+                Section(header: Text("SECTION 5 — REMARK / DESCRIPTION")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Remark").font(.caption).foregroundColor(.gray)
+                        TextEditor(text: $remark)
+                            .frame(minHeight: 60)
+                    }
+                }
+
+                // SECTION 6 — STATUS & CONTROLS
+                Section(header: Text("SECTION 6 — STATUS & CONTROLS")) {
+                    Picker("Account Status", selection: $status) {
+                        ForEach(statusOptions, id: \.self) { st in
+                            Text(st).tag(st)
+                        }
+                    }
+
+                    Toggle("Credit Blocked", isOn: $creditBlocked)
                 }
             }
-            .navigationTitle(customer != nil ? "Edit Customer (\(customerId))" : "Add Customer")
+            .navigationTitle(customer != nil ? "Edit Customer (\(customerId))" : "Add New Customer")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1104,35 +1235,71 @@ struct IOSCustomerFormSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        if name.trimmingCharacters(in: .whitespaces).isEmpty {
+                        let cleanName = name.trimmingCharacters(in: .whitespaces)
+                        let cleanMobile = mobile.trimmingCharacters(in: .whitespaces)
+                        let cleanCategory = category.trimmingCharacters(in: .whitespaces)
+                        let cleanCdCode = cdCode.trimmingCharacters(in: .whitespaces)
+                        let cleanGMobile = guarantorMobile.trimmingCharacters(in: .whitespaces)
+
+                        if cleanName.isEmpty {
                             errorMsg = "Customer name is required."
                             return
                         }
-                        if mobile.trimmingCharacters(in: .whitespaces).isEmpty {
+                        if cleanMobile.isEmpty {
                             errorMsg = "Mobile number is required."
                             return
                         }
-                        if category.trimmingCharacters(in: .whitespaces).isEmpty {
+                        if cleanMobile.count != 10 || !cleanMobile.allSatisfy({ $0.isNumber }) {
+                            errorMsg = "Mobile number must be exactly 10 numeric digits."
+                            return
+                        }
+                        if cleanCategory.isEmpty {
                             errorMsg = "Please select a customer category."
+                            return
+                        }
+                        if cleanCdCode.isEmpty {
+                            errorMsg = "CD Code is required."
+                            return
+                        }
+                        if !cleanGMobile.isEmpty && (cleanGMobile.count != 10 || !cleanGMobile.allSatisfy({ $0.isNumber })) {
+                            errorMsg = "Guarantor mobile number must be exactly 10 numeric digits."
                             return
                         }
 
                         let limit = Double(creditLimitText) ?? 50000.0
+                        let opening = Double(openingBalanceText) ?? 0.0
+                        let returnDays = Int(udharWapisiDinText) ?? 30
+
                         var item = customer ?? IOSCustomerItem(
                             id: UUID().uuidString,
                             customerId: customerId,
-                            customerCode: cdCode,
-                            name: name,
-                            mobile: mobile
+                            customerCode: cleanCdCode,
+                            name: cleanName,
+                            mobile: cleanMobile
                         )
+
                         item.customerId = customerId
-                        item.name = name
-                        item.mobile = mobile
-                        item.customerCode = cdCode
-                        item.category = category
-                        item.area = area
+                        item.customerCode = cleanCdCode
+                        item.name = cleanName
+                        item.mobile = cleanMobile
+                        item.alternateMobile = alternateMobile.trimmingCharacters(in: .whitespaces)
+                        item.email = email.trimmingCharacters(in: .whitespaces)
+                        item.idCncNo = idCncNo.trimmingCharacters(in: .whitespaces)
+                        item.photoUrl = photoUrl
+                        item.cibilStatus = cibilStatus
+                        item.category = cleanCategory
                         item.creditLimit = limit
+                        item.openingBalance = opening
+                        item.taxNo = taxNo.trimmingCharacters(in: .whitespaces)
+                        item.udharWapisiDin = returnDays
+                        item.area = area.trimmingCharacters(in: .whitespaces)
+                        item.address = address.trimmingCharacters(in: .whitespaces)
+                        item.guarantorName = guarantorName.trimmingCharacters(in: .whitespaces)
+                        item.guarantorMobile = cleanGMobile
+                        item.remark = remark.trimmingCharacters(in: .whitespaces)
+                        item.status = status
                         item.creditBlocked = creditBlocked
+
                         onSave(item)
                     }
                     .bold()
@@ -1145,11 +1312,34 @@ struct IOSCustomerFormSheet: View {
                     customerId = c.customerId
                     name = c.name
                     mobile = c.mobile
+                    alternateMobile = c.alternateMobile
+                    email = c.email
+                    idCncNo = c.idCncNo
                     cdCode = c.customerCode
+                    photoUrl = c.photoUrl
+                    cibilStatus = c.cibilStatus
                     category = c.category
-                    area = c.area
                     creditLimitText = "\(Int(c.creditLimit))"
+                    openingBalanceText = "\(Int(c.openingBalance))"
+                    taxNo = c.taxNo
+                    udharWapisiDinText = "\(c.udharWapisiDin)"
+                    area = c.area
+                    address = c.address
+                    guarantorName = c.guarantorName
+                    guarantorMobile = c.guarantorMobile
+                    remark = c.remark
+                    status = c.status
                     creditBlocked = c.creditBlocked
+
+                    if let pUrl = c.photoUrl, !pUrl.isEmpty {
+                        SupabaseIOSClient.shared.createSignedPhotoUrl(path: pUrl) { signed in
+                            if let s = signed {
+                                DispatchQueue.main.async {
+                                    self.photoUrl = s
+                                }
+                            }
+                        }
+                    }
                 } else {
                     SupabaseIOSClient.shared.generateNextCustomerIdRPC(businessId: "00000000-0000-0000-0000-000000000001") { nextId in
                         DispatchQueue.main.async {

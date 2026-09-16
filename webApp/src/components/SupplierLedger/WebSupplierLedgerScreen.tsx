@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   WebSupplierOverview,
   WebSupplierLedgerEntry,
-  INITIAL_WEB_SUPPLIERS,
   INITIAL_WEB_LEDGER_ENTRIES
 } from '../../types/supplierledger';
 import { SupplierLedgerEntryModal } from './SupplierLedgerEntryModal';
@@ -11,7 +10,9 @@ import { supabase } from '../../lib/supabase';
 import '../Udhaari/Udhaari.css';
 
 export const WebSupplierLedgerScreen: React.FC = () => {
-  const [suppliers] = useState(INITIAL_WEB_SUPPLIERS);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+  const [suppliersError, setSuppliersError] = useState<string | null>(null);
   const [entries, setEntries] = useState<WebSupplierLedgerEntry[]>(INITIAL_WEB_LEDGER_ENTRIES);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('ALL'); // 'ALL' or specific supplierId
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,8 +59,32 @@ export const WebSupplierLedgerScreen: React.FC = () => {
     }
   };
 
+  const fetchSuppliersFromSupabase = async () => {
+    try {
+      setIsLoadingSuppliers(true);
+      setSuppliersError(null);
+      const { data, error } = await supabase.from('suppliers').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.log('Supabase suppliers read error', error);
+        setSuppliersError(error.message);
+      } else if (data) {
+        const mapped = data.map((item: any, idx: number) => ({
+          id: item.id || `SUP-00${idx + 1}`,
+          name: item.name || item.party_name || 'Supplier'
+        }));
+        setSuppliers(mapped);
+      }
+    } catch (e: any) {
+      console.log('Supabase suppliers fetch exception', e);
+      setSuppliersError(e?.message || 'Unable to load suppliers');
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  };
+
   useEffect(() => {
     fetchLedgerFromSupabase();
+    fetchSuppliersFromSupabase();
   }, []);
 
   // CALCULATE ALL SUPPLIERS PAYABLE OVERVIEW (SHARED LOGIC: Payable = Opening + Purchases - Paid - Returns)
@@ -119,11 +144,13 @@ export const WebSupplierLedgerScreen: React.FC = () => {
 
   // HANDLERS
   const handleAddClick = () => {
+    fetchSuppliersFromSupabase();
     setEditingEntry(null);
     setIsFormModalOpen(true);
   };
 
   const handleEditClick = (entry: WebSupplierLedgerEntry) => {
+    fetchSuppliersFromSupabase();
     setEditingEntry(entry);
     setIsFormModalOpen(true);
   };
@@ -522,6 +549,9 @@ export const WebSupplierLedgerScreen: React.FC = () => {
         <SupplierLedgerEntryModal
           isOpen={isFormModalOpen}
           editingEntry={editingEntry}
+          suppliers={suppliers}
+          isLoadingSuppliers={isLoadingSuppliers}
+          suppliersError={suppliersError}
           onClose={() => setIsFormModalOpen(false)}
           onSave={handleSaveEntry}
         />
